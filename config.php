@@ -1,8 +1,8 @@
 <?php
 $servername = "localhost";
-$username = "kuchenvi_kho_kuchen";
-$password = "HYvqPg65uJWQ3AhtKGdN";
-$dbname = "kuchenvi_kho_kuchen"; 
+$username = "root";
+$password = "";
+$dbname = "jiqsnnop_kho_kuchen"; 
 $conn = new mysqli($servername, $username, $password, $dbname);
 if ($conn->connect_error) {
     die("Kết nối thất bại: " . $conn->connect_error);
