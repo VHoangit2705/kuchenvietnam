@@ -1,0 +1,49 @@
+[23-Sep-2025 16:06:11 Asia/Ho_Chi_Minh] PHP Warning:  include(config.php): Failed to open stream: No such file or directory in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 8
+[23-Sep-2025 16:06:11 Asia/Ho_Chi_Minh] PHP Warning:  include(): Failed opening 'config.php' for inclusion (include_path='.:/opt/alt/php82/usr/share/pear:/opt/alt/php82/usr/share/php:/usr/share/pear:/usr/share/php') in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 8
+[23-Sep-2025 16:06:11 Asia/Ho_Chi_Minh] PHP Warning:  Undefined variable $conn in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 59
+[23-Sep-2025 16:06:11 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught Error: Call to a member function close() on null in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php:59
+Stack trace:
+#0 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 59
+[23-Sep-2025 16:06:26 Asia/Ho_Chi_Minh] PHP Warning:  include(config.php): Failed to open stream: No such file or directory in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 8
+[23-Sep-2025 16:06:26 Asia/Ho_Chi_Minh] PHP Warning:  include(): Failed opening 'config.php' for inclusion (include_path='.:/opt/alt/php82/usr/share/pear:/opt/alt/php82/usr/share/php:/usr/share/pear:/usr/share/php') in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 8
+[23-Sep-2025 16:06:26 Asia/Ho_Chi_Minh] PHP Warning:  Undefined variable $conn in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 59
+[23-Sep-2025 16:06:26 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught Error: Call to a member function close() on null in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php:59
+Stack trace:
+#0 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 59
+[23-Sep-2025 16:06:32 Asia/Ho_Chi_Minh] PHP Warning:  include(config.php): Failed to open stream: No such file or directory in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 8
+[23-Sep-2025 16:06:32 Asia/Ho_Chi_Minh] PHP Warning:  include(): Failed opening 'config.php' for inclusion (include_path='.:/opt/alt/php82/usr/share/pear:/opt/alt/php82/usr/share/php:/usr/share/pear:/usr/share/php') in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 8
+[23-Sep-2025 16:06:32 Asia/Ho_Chi_Minh] PHP Warning:  Undefined variable $conn in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 59
+[23-Sep-2025 16:06:32 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught Error: Call to a member function close() on null in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php:59
+Stack trace:
+#0 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 59
+[23-Sep-2025 16:06:38 Asia/Ho_Chi_Minh] PHP Warning:  include(config.php): Failed to open stream: No such file or directory in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 8
+[23-Sep-2025 16:06:38 Asia/Ho_Chi_Minh] PHP Warning:  include(): Failed opening 'config.php' for inclusion (include_path='.:/opt/alt/php82/usr/share/pear:/opt/alt/php82/usr/share/php:/usr/share/pear:/usr/share/php') in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 8
+[23-Sep-2025 16:06:38 Asia/Ho_Chi_Minh] PHP Warning:  Undefined variable $conn in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 59
+[23-Sep-2025 16:06:38 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught Error: Call to a member function close() on null in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php:59
+Stack trace:
+#0 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 59
+[23-Sep-2025 16:06:39 Asia/Ho_Chi_Minh] PHP Warning:  include(config.php): Failed to open stream: No such file or directory in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 8
+[23-Sep-2025 16:06:39 Asia/Ho_Chi_Minh] PHP Warning:  include(): Failed opening 'config.php' for inclusion (include_path='.:/opt/alt/php82/usr/share/pear:/opt/alt/php82/usr/share/php:/usr/share/pear:/usr/share/php') in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 8
+[23-Sep-2025 16:06:39 Asia/Ho_Chi_Minh] PHP Warning:  Undefined variable $conn in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 59
+[23-Sep-2025 16:06:39 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught Error: Call to a member function close() on null in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php:59
+Stack trace:
+#0 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 59
+[23-Sep-2025 16:11:26 Asia/Ho_Chi_Minh] PHP Warning:  include(config.php): Failed to open stream: No such file or directory in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 8
+[23-Sep-2025 16:11:26 Asia/Ho_Chi_Minh] PHP Warning:  include(): Failed opening 'config.php' for inclusion (include_path='.:/opt/alt/php82/usr/share/pear:/opt/alt/php82/usr/share/php:/usr/share/pear:/usr/share/php') in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 8
+[23-Sep-2025 16:11:26 Asia/Ho_Chi_Minh] PHP Warning:  Undefined variable $conn in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 58
+[23-Sep-2025 16:11:26 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught Error: Call to a member function close() on null in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php:58
+Stack trace:
+#0 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 58
+[23-Sep-2025 16:11:43 Asia/Ho_Chi_Minh] PHP Warning:  include(config.php): Failed to open stream: No such file or directory in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 8
+[23-Sep-2025 16:11:43 Asia/Ho_Chi_Minh] PHP Warning:  include(): Failed opening 'config.php' for inclusion (include_path='.:/opt/alt/php82/usr/share/pear:/opt/alt/php82/usr/share/php:/usr/share/pear:/usr/share/php') in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 8
+[23-Sep-2025 16:11:43 Asia/Ho_Chi_Minh] PHP Warning:  Undefined variable $conn in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 58
+[23-Sep-2025 16:11:43 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught Error: Call to a member function close() on null in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php:58
+Stack trace:
+#0 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/api/login.php on line 58

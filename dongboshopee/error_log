@@ -1,0 +1,22 @@
+[04-Aug-2025 23:03:01 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught mysqli_sql_exception: No such file or directory in /home/kuchenvi/public_html/kuchen/khokuchen/config.php:6
+Stack trace:
+#0 /home/kuchenvi/public_html/kuchen/khokuchen/config.php(6): mysqli->__construct()
+#1 /home/kuchenvi/public_html/kuchen/khokuchen/dongboshopee/shopeekorea.php(3): include('/home/kuchenvi/...')
+#2 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/config.php on line 6
+[05-Aug-2025 23:02:01 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught mysqli_sql_exception: No such file or directory in /home/kuchenvi/public_html/kuchen/khokuchen/config.php:6
+Stack trace:
+#0 /home/kuchenvi/public_html/kuchen/khokuchen/config.php(6): mysqli->__construct()
+#1 /home/kuchenvi/public_html/kuchen/khokuchen/dongboshopee/shopeekorea.php(3): include('/home/kuchenvi/...')
+#2 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/config.php on line 6
+[05-Sep-2025 11:10:52 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught mysqli_sql_exception: Lock wait timeout exceeded; try restarting transaction in /home/kuchenvi/public_html/kuchen/khokuchen/dongboshopee/shopeekorea.php:21
+Stack trace:
+#0 /home/kuchenvi/public_html/kuchen/khokuchen/dongboshopee/shopeekorea.php(21): mysqli_stmt->execute()
+#1 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/dongboshopee/shopeekorea.php on line 21
+[05-Sep-2025 11:10:52 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught mysqli_sql_exception: Lock wait timeout exceeded; try restarting transaction in /home/kuchenvi/public_html/kuchen/khokuchen/dongboshopee/index.php:20
+Stack trace:
+#0 /home/kuchenvi/public_html/kuchen/khokuchen/dongboshopee/index.php(20): mysqli_stmt->execute()
+#1 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/dongboshopee/index.php on line 20

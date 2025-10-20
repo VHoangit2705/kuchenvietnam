@@ -1,0 +1,58 @@
+[19-Jul-2025 09:37:00 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/xem_donhang.php on line 3
+[19-Jul-2025 09:37:46 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/xem_donhang.php on line 3
+[19-Jul-2025 09:39:01 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/xem_donhang.php on line 3
+[19-Jul-2025 09:39:48 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/xem_donhang.php on line 3
+[19-Jul-2025 09:49:20 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/xem_donhang.php on line 3
+[19-Jul-2025 09:49:40 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/xem_donhang.php on line 3
+[19-Jul-2025 09:52:05 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/xem_donhang.php on line 3
+[19-Jul-2025 09:52:13 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/xem_donhang.php on line 3
+[19-Jul-2025 09:57:32 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/xem_donhang.php on line 3
+[19-Jul-2025 09:58:20 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/xem_donhang.php on line 3
+[19-Jul-2025 09:58:31 Asia/Ho_Chi_Minh] Order code nhận được: [VNI04002795132 (2)]
+[19-Jul-2025 09:58:37 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/xem_donhang.php on line 3
+[19-Jul-2025 10:00:07 Asia/Ho_Chi_Minh] Order code nhận được: [VNI04002795132 (2)]
+[19-Jul-2025 10:00:22 Asia/Ho_Chi_Minh] Order code nhận được: [VNI04002795132 (2)]
+[19-Jul-2025 10:02:12 Asia/Ho_Chi_Minh] Order code nhận được: [VNI04002795132 (2)]
+[19-Jul-2025 10:02:17 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 3
+[19-Jul-2025 10:04:14 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 3
+[19-Jul-2025 10:05:03 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 3
+[19-Jul-2025 10:06:19 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 3
+[19-Jul-2025 10:07:17 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 3
+[19-Jul-2025 10:17:24 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 3
+[19-Jul-2025 10:17:26 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 3
+[19-Jul-2025 13:44:41 Asia/Ho_Chi_Minh] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 3
+[19-Jul-2025 14:40:51 Asia/Ho_Chi_Minh] PHP Warning:  include(config.php): Failed to open stream: No such file or directory in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 8
+[19-Jul-2025 14:40:51 Asia/Ho_Chi_Minh] PHP Warning:  include(): Failed opening 'config.php' for inclusion (include_path='.:/opt/alt/php82/usr/share/pear:/opt/alt/php82/usr/share/php:/usr/share/pear:/usr/share/php') in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 8
+[19-Jul-2025 14:40:51 Asia/Ho_Chi_Minh] PHP Warning:  Undefined variable $conn in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 14
+[19-Jul-2025 14:40:51 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught Error: Call to a member function prepare() on null in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php:14
+Stack trace:
+#0 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 14
+[19-Jul-2025 14:41:22 Asia/Ho_Chi_Minh] PHP Warning:  include(config.php): Failed to open stream: No such file or directory in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 8
+[19-Jul-2025 14:41:22 Asia/Ho_Chi_Minh] PHP Warning:  include(): Failed opening 'config.php' for inclusion (include_path='.:/opt/alt/php82/usr/share/pear:/opt/alt/php82/usr/share/php:/usr/share/pear:/usr/share/php') in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 8
+[19-Jul-2025 14:41:22 Asia/Ho_Chi_Minh] PHP Warning:  Undefined variable $conn in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 14
+[19-Jul-2025 14:41:22 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught Error: Call to a member function prepare() on null in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php:14
+Stack trace:
+#0 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 14
+[19-Jul-2025 14:41:24 Asia/Ho_Chi_Minh] PHP Warning:  include(config.php): Failed to open stream: No such file or directory in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 8
+[19-Jul-2025 14:41:24 Asia/Ho_Chi_Minh] PHP Warning:  include(): Failed opening 'config.php' for inclusion (include_path='.:/opt/alt/php82/usr/share/pear:/opt/alt/php82/usr/share/php:/usr/share/pear:/usr/share/php') in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 8
+[19-Jul-2025 14:41:24 Asia/Ho_Chi_Minh] PHP Warning:  Undefined variable $conn in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 14
+[19-Jul-2025 14:41:24 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught Error: Call to a member function prepare() on null in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php:14
+Stack trace:
+#0 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/scanqr2.php on line 14
+[29-Jul-2025 09:53:01 Asia/Ho_Chi_Minh] PHP Warning:  include(config.php): Failed to open stream: No such file or directory in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/process_scan.php on line 8
+[29-Jul-2025 09:53:01 Asia/Ho_Chi_Minh] PHP Warning:  include(): Failed opening 'config.php' for inclusion (include_path='.:/opt/alt/php82/usr/share/pear:/opt/alt/php82/usr/share/php:/usr/share/pear:/usr/share/php') in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/process_scan.php on line 8
+[29-Jul-2025 09:53:01 Asia/Ho_Chi_Minh] PHP Warning:  Undefined variable $conn in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/process_scan.php on line 15
+[29-Jul-2025 09:53:01 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught Error: Call to a member function begin_transaction() on null in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/process_scan.php:15
+Stack trace:
+#0 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/process_scan.php on line 15
+[29-Jul-2025 09:53:06 Asia/Ho_Chi_Minh] PHP Warning:  include(config.php): Failed to open stream: No such file or directory in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/process_scan.php on line 8
+[29-Jul-2025 09:53:06 Asia/Ho_Chi_Minh] PHP Warning:  include(): Failed opening 'config.php' for inclusion (include_path='.:/opt/alt/php82/usr/share/pear:/opt/alt/php82/usr/share/php:/usr/share/pear:/usr/share/php') in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/process_scan.php on line 8
+[29-Jul-2025 09:53:06 Asia/Ho_Chi_Minh] PHP Warning:  Undefined variable $conn in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/process_scan.php on line 15
+[29-Jul-2025 09:53:06 Asia/Ho_Chi_Minh] PHP Fatal error:  Uncaught Error: Call to a member function begin_transaction() on null in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/process_scan.php:15
+Stack trace:
+#0 {main}
+  thrown in /home/kuchenvi/public_html/kuchen/khokuchen/mayquet/process_scan.php on line 15
