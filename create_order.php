@@ -287,7 +287,7 @@ const ORDER_TYPES_WITH_SHIP_UNIT = new Set(['lazada','shopee','tiktok','shopee_r
 const ORDER_TYPES_AUTO_CODE = new Set(['warehouse_viettel','warehouse_ghtk']);
 // Các loại đơn sẽ dùng giá bán lẻ (price_retail)
 const ORDER_TYPES_USE_RETAIL = new Set(['warehouse_branch','warehouse_viettel','warehouse_ghtk']);
-const API_CUSTOMER_BY_PHONE   = 'https://kuchenvietnam.vn/kuchen/khokuchen/api/get-customer-info.php?phone=';
+const API_CUSTOMER_BY_PHONE   = 'http://localhost/khokuchen/api/get-customer-info.php?phone=';
 const API_FIND_BY_PHONE_LOCAL = 'api/get-customer-info.php?phone=';
 
 const formatVND = (n) => (Number(n||0)).toLocaleString('vi-VN') + ' VNĐ';

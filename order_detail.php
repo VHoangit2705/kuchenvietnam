@@ -464,7 +464,7 @@ $addressDisplay = implode(', ', $parts);
         <div class="panel-header">
           <h6 class="mb-0">III. Thông tin Bảo hành</h6>
         </div>
-        <div class="panel-body">
+        <div class="panel-body" style="height: 62vh; overflow-y: auto; overflow-x: hidden;">
           <?php /* giữ nguyên form & tên field để không đổi logic */ ?>
           <form method="POST" action="process_scan_admin.php">
             <input type="hidden" name="order_code" value="<?php echo $order['order_code2']; ?>">
