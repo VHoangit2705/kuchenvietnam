@@ -70,101 +70,110 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $order_id = $conn->insert_id;
 
             // --------- THÊM SẢN PHẨM ----------
-            if (!empty($order['products']) && is_array($order['products'])) {
-                $all_no_warranty = true;
+            // --------- THÊM SẢN PHẨM ----------
+if (!empty($order['products']) && is_array($order['products'])) {
+    $all_no_warranty = true;
 
-                foreach ($order['products'] as $product) {
-                    $product_name      = $conn->real_escape_string($product['product_name'] ?? '');
-                    $quantity          = (int)($product['quantity'] ?? 0);
-                    $excluding_VAT     = (int)preg_replace('/[.,\sVNĐ]/', '', $product['original_price'] ?? '0');
-                    $VAT               = "10%";
-                    $VAT_price         = (int)preg_replace('/[.,\sVNĐ]/', '', $product['vat'] ?? '0');
-                    $price             = (int)preg_replace('/[.,\sVNĐ]/', '', $product['price'] ?? '0');
-                    $price_difference  = isset($product['price_difference']) ? (int)preg_replace('/[.,\sVNĐ]/', '', $product['price_difference']) : 0;
-                    $sub_address       = $conn->real_escape_string($product['sub_address'] ?? '');
-                    $is_promotion      = isset($product['is_promotion']) ? 1 : 0;
-                    $no_warranty_scan  = isset($product['no_warranty_scan']) ? 0 : 1; // theo code cũ
-                    $install_flag      = 0; // MẶC ĐỊNH: 0
+    foreach ($order['products'] as $product) {
+        $product_name      = $conn->real_escape_string($product['product_name'] ?? '');
+        $quantity          = (int)($product['quantity'] ?? 0);
+        $excluding_VAT     = (int)preg_replace('/[.,\sVNĐ]/', '', $product['original_price'] ?? '0');
+        $VAT               = "10%";
+        $VAT_price         = (int)preg_replace('/[.,\sVNĐ]/', '', $product['vat'] ?? '0');
+        $price             = (int)preg_replace('/[.,\sVNĐ]/', '', $product['price'] ?? '0');
+        $price_difference  = isset($product['price_difference']) ? (int)preg_replace('/[.,\sVNĐ]/', '', $product['price_difference']) : 0;
+        $sub_address       = $conn->real_escape_string($product['sub_address'] ?? '');
+        $is_promotion      = isset($product['is_promotion']) ? 1 : 0;
+        $no_warranty_scan  = isset($product['no_warranty_scan']) ? 0 : 1; // theo code cũ
+        $install_flag      = 0; // MẶC ĐỊNH: 0
 
-                    // Kiểm tra `print` và `install` từ bảng products
-                    $sql_check = "SELECT `print`, `install` FROM products WHERE product_name = '$product_name' LIMIT 1";
-                    $result_check = $conn->query($sql_check);
-                    if ($result_check && $result_check->num_rows > 0) {
-                        $row = $result_check->fetch_assoc();
+        // NEW: lấy product_id kèm print, install từ bảng products theo product_name
+        $product_id = null;
+        $sql_check = "SELECT `id`, `print`, `install` FROM products WHERE product_name = '$product_name' LIMIT 1";
+        $result_check = $conn->query($sql_check);
+        if ($result_check && $result_check->num_rows > 0) {
+            $row = $result_check->fetch_assoc();
 
-                        // print: quyết định warranty_scan như cũ
-                        if ((int)$row['print'] === 1) {
-                            $no_warranty_scan = 0;
-                        } else {
-                            // nếu print != 1 thì vẫn bắt quét
-                            $no_warranty_scan = 1;
-                        }
+            // gán product_id
+            $product_id = (int)$row['id'];
 
-                        // NEW: nếu sản phẩm có install = 1 → set cờ install cho order_products
-                        if (!empty($row['install']) && (int)$row['install'] === 1) {
-                            $install_flag = 1;
-                        }
-                    }
-
-                    if ($no_warranty_scan === 1) {
-                        $all_no_warranty = false;
-                    }
-                    $warranty_scan = $no_warranty_scan;
-
-                    // Cộng tổng tiền (giữ logic cũ)
-                    $total_price += $is_promotion ? ($price + $price_difference) : $price;
-
-                    // INSERT order_products (BỔ SUNG CỘT install)
-                    $sql_product = "
-                        INSERT INTO order_products 
-                            (order_id, product_name, quantity, excluding_VAT, VAT, VAT_price, price, 
-                             price_difference, sub_address, is_promotion, warranty_scan, install)
-                        VALUES 
-                            ($order_id, '$product_name', $quantity, $excluding_VAT, '$VAT', $VAT_price, $price, 
-                             $price_difference, '$sub_address', $is_promotion, $warranty_scan, $install_flag)
-                    ";
-
-                    if (!$conn->query($sql_product)) {
-                        echo "Lỗi khi thêm sản phẩm: " . $conn->error;
-                        // không exit để cố lưu các sp khác; tuỳ nghiệp vụ có thể rollback
-                    }
-                }
-
-                // --------- CẬP NHẬT TRẠNG THÁI ĐƠN THEO 'khoa_tem' ----------
-                $sql_check_khoa_tem = "
-                    SELECT COUNT(*) AS total, 
-                           SUM(CASE WHEN p.khoa_tem = 1 THEN 1 ELSE 0 END) AS total_khoa_tem
-                    FROM order_products op
-                    JOIN products p ON op.product_name = p.product_name
-                    WHERE op.order_id = $order_id
-                ";
-                $result_khoa_tem = $conn->query($sql_check_khoa_tem);
-                if ($result_khoa_tem && $row_khoa_tem = $result_khoa_tem->fetch_assoc()) {
-                    $total = (int)$row_khoa_tem['total'];
-                    $total_khoa_tem = (int)$row_khoa_tem['total_khoa_tem'];
-
-                    if ($total > 0 && $total === $total_khoa_tem) {
-                        $status = "Đã quét QR";
-                    } elseif ($all_no_warranty) {
-                        $status = "Hàng linh kiện";
-                    } else {
-                        $status = "Đang chờ quét QR";
-                    }
-                } else {
-                    // fallback
-                    if ($all_no_warranty) {
-                        $status = "Hàng linh kiện";
-                    } else {
-                        $status = "Đang chờ quét QR";
-                    }
-                }
-
-                // Update status
-                $sql_update_status = "UPDATE orders SET status = '$status' WHERE id = $order_id";
-                if (!$conn->query($sql_update_status)) {
-                    echo "Lỗi khi cập nhật trạng thái đơn hàng: " . $conn->error;
-                }
+            // print: quyết định warranty_scan như cũ
+            if ((int)$row['print'] === 1) {
+                $no_warranty_scan = 0;
+            } else {
+                // nếu print != 1 thì vẫn bắt quét
+                $no_warranty_scan = 1;
             }
+
+            // nếu sản phẩm có install = 1 → set cờ install cho order_products
+            if (!empty($row['install']) && (int)$row['install'] === 1) {
+                $install_flag = 1;
+            }
+        }
+
+        if ($no_warranty_scan === 1) {
+            $all_no_warranty = false;
+        }
+        $warranty_scan = $no_warranty_scan;
+
+        // Cộng tổng tiền (giữ logic cũ)
+        $total_price += $is_promotion ? ($price + $price_difference) : $price;
+
+        // INSERT order_products (BỔ SUNG CỘT product_id đứng trước product_name)
+        // nếu không tìm thấy product_id thì để NULL
+        $product_id_sql = is_null($product_id) ? "NULL" : (string)$product_id;
+
+        $sql_product = "
+            INSERT INTO order_products 
+                (order_id, product_id, product_name, quantity, excluding_VAT, VAT, VAT_price, price, 
+                 price_difference, sub_address, is_promotion, warranty_scan, install)
+            VALUES 
+                ($order_id, $product_id_sql, '$product_name', $quantity, $excluding_VAT, '$VAT', $VAT_price, $price, 
+                 $price_difference, '$sub_address', $is_promotion, $warranty_scan, $install_flag)
+        ";
+
+        if (!$conn->query($sql_product)) {
+            echo "Lỗi khi thêm sản phẩm: " . $conn->error;
+            // không exit để cố lưu các sp khác; tuỳ nghiệp vụ có thể rollback
+        }
+    }
+
+    // --------- CẬP NHẬT TRẠNG THÁI ĐƠN THEO 'khoa_tem' ----------
+    $sql_check_khoa_tem = "
+        SELECT COUNT(*) AS total, 
+               SUM(CASE WHEN p.khoa_tem = 1 THEN 1 ELSE 0 END) AS total_khoa_tem
+        FROM order_products op
+        JOIN products p ON op.product_name = p.product_name
+        WHERE op.order_id = $order_id
+    ";
+    $result_khoa_tem = $conn->query($sql_check_khoa_tem);
+    if ($result_khoa_tem && $row_khoa_tem = $result_khoa_tem->fetch_assoc()) {
+        $total = (int)$row_khoa_tem['total'];
+        $total_khoa_tem = (int)$row_khoa_tem['total_khoa_tem'];
+
+        if ($total > 0 && $total === $total_khoa_tem) {
+            $status = "Đã quét QR";
+        } elseif ($all_no_warranty) {
+            $status = "Hàng linh kiện";
+        } else {
+            $status = "Đang chờ quét QR";
+        }
+    } else {
+        // fallback
+        if ($all_no_warranty) {
+            $status = "Hàng linh kiện";
+        } else {
+            $status = "Đang chờ quét QR";
+        }
+    }
+
+    // Update status
+    $sql_update_status = "UPDATE orders SET status = '$status' WHERE id = $order_id";
+    if (!$conn->query($sql_update_status)) {
+        echo "Lỗi khi cập nhật trạng thái đơn hàng: " . $conn->error;
+    }
+}
+
 
             // --------- CẬP NHẬT TỔNG TIỀN + GIẢM GIÁ ----------
             $total_price -= $applied_discount;
