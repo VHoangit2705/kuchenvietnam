@@ -215,7 +215,7 @@ if (!empty($order['products']) && is_array($order['products'])) {
     header("Location: success.php");
     exit();
 } else {
-    echo "Phương thức không được hỗ trợ!";
+    echo "Phương thức không được hỗ trợ. Vui lòng báo quản trị viên CNTT để được hỗ trợ xử lý!";
 }
 
 $conn->close();
