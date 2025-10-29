@@ -32,31 +32,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['order_code'])) {
     }
     $orderId = (int)$order['id'];
 
-    // 2. Lấy danh sách order_products (CHỈNH: join theo product_id thay vì product_name)
+    /* =========================
+       2. Xác định chi nhánh để chọn đúng cờ nhập tay & khóa tem
+    ==========================*/
+    $position = $_SESSION['position'] ?? '';
+    $nhapField = 'p.nhap_tay';    // mặc định cho admin
+    $khoaField = 'p.khoa_tem';
+
+    if (stripos($position, 'vinh') !== false) {
+        $nhapField = 'p.nhap_tay_vinh';
+        $khoaField = 'p.khoa_tem_vinh';
+    } elseif (stripos($position, 'hanoi') !== false || stripos($position, 'ha noi') !== false) {
+        $nhapField = 'p.nhap_tay_hanoi';
+        $khoaField = 'p.khoa_tem_hanoi';
+    } elseif (stripos($position, 'hcm') !== false || stripos($position, 'ho chi minh') !== false) {
+        $nhapField = 'p.nhap_tay_hcm';
+        $khoaField = 'p.khoa_tem_hcm';
+    }
+    // Admin => giữ nguyên p.nhap_tay, p.khoa_tem
+
+    // 3. Lấy danh sách order_products (JOIN theo product_id)
     $sql = "
       SELECT 
         op.id AS order_product_id,
-        op.product_id,                            -- dùng cho data-* và so khớp
-        COALESCE(p.product_name, op.product_name) AS display_name, -- tên hiển thị
+        op.product_id,
+        COALESCE(p.product_name, op.product_name) AS display_name,
         op.quantity,
         op.is_promotion,
-        p.nhap_tay,
+        {$nhapField} AS nhap_tay,
         p.snnew,
         COUNT(pw.id) AS scanned_count
       FROM order_products op
       LEFT JOIN product_warranties pw 
         ON pw.order_product_id = op.id
       LEFT JOIN products p 
-        ON p.id = op.product_id                   -- CHỈNH Ở ĐÂY
-      WHERE op.order_id       = ?
-        AND op.warranty_scan   = 1
-        AND (p.print = 0 OR p.print IS NULL)      -- an toàn nếu p null
-        AND (p.khoa_tem = 0 OR p.khoa_tem IS NULL)
+        ON p.id = op.product_id
+      WHERE op.order_id = ?
+        AND op.warranty_scan = 1
+        AND ({$khoaField} = 0 OR {$khoaField} IS NULL)
+        AND (p.print = 0 OR p.print IS NULL)
       GROUP BY
         op.id, op.product_id, display_name,
-        op.quantity, op.is_promotion, p.nhap_tay, p.snnew
+        op.quantity, op.is_promotion, nhap_tay, p.snnew
       ORDER BY op.is_promotion ASC, op.id ASC
     ";
+
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
         die("Prepare failed: " . $conn->error);
@@ -75,11 +95,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['order_code'])) {
             $orderProducts[] = $row;
         }
     }
+
     if (empty($orderProducts)) {
         die('Đơn hàng không tồn tại hoặc không có sản phẩm nào cần quét QR.');
     }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
