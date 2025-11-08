@@ -32,9 +32,12 @@ if (!$order) {
 
 // Lấy danh sách sản phẩm của đơn hàng từ bảng `order_products`
 $products_query = $conn->query("
-    SELECT op.*, p.price AS actual_price 
+    SELECT 
+      op.*,
+      p.product_name AS display_name,
+      p.price        AS actual_price
     FROM order_products op
-    JOIN products p ON op.product_name = p.product_name
+    LEFT JOIN products p ON p.id = op.product_id
     WHERE op.order_id = $order_id
 ");
 
@@ -409,7 +412,17 @@ $addressDisplay = implode(', ', $parts);
                     $total_price += $subtotal;
               ?>
                 <tr data-product-id="<?php echo $product['id']; ?>">
-                  <td class="text-start"><?php echo htmlspecialchars($product['product_name']); ?></td>
+                  <td class="text-start">
+  <?php
+    $nameDisplay = $product['display_name'] ?? '';
+    if ($nameDisplay === '' || $nameDisplay === null) {
+      // fallback: dùng tên lưu sẵn ở order_products để không mất dữ liệu hiển thị
+      $nameDisplay = $product['product_name'] ?? 'Không xác định';
+    }
+    echo htmlspecialchars($nameDisplay);
+  ?>
+</td>
+
                   <td style="width:110px">
                     <input type="text" class="form-control form-control-sm quantity text-center" value="<?php echo $product['quantity']; ?>" readonly>
                   </td>
@@ -464,7 +477,7 @@ $addressDisplay = implode(', ', $parts);
         <div class="panel-header">
           <h6 class="mb-0">III. Thông tin Bảo hành</h6>
         </div>
-        <div class="panel-body" style="height: 62vh; overflow-y: auto; overflow-x: hidden;">
+        <div class="panel-body">
           <?php /* giữ nguyên form & tên field để không đổi logic */ ?>
           <form method="POST" action="process_scan_admin.php">
             <input type="hidden" name="order_code" value="<?php echo $order['order_code2']; ?>">
@@ -487,7 +500,14 @@ $addressDisplay = implode(', ', $parts);
                 ?>
                   <tr>
                     <td class="text-start align-middle">
-                      <?php echo htmlspecialchars($product['product_name']); ?>
+                      <?php
+  $nameDisplay = $product['display_name'] ?? '';
+  if ($nameDisplay === '' || $nameDisplay === null) {
+    $nameDisplay = $product['product_name'] ?? 'Không xác định';
+  }
+  echo htmlspecialchars($nameDisplay);
+?>
+
                     </td>
                     <td class="align-middle">
                       <div class="d-flex justify-content-center align-items-center">
