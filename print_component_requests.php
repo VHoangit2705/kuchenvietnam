@@ -1,10 +1,5 @@
 <?php
-// ================== AUTH & SESSION (tuỳ chọn) ==================
-// include 'auth.php';
 session_start();
-// if (!isset($_SESSION['full_name'])) { header("Location: index.php"); exit(); }
-
-// ================== TIMEZONE ==================
 date_default_timezone_set('Asia/Ho_Chi_Minh');
 
 // ================== DB CONNECT ==================
@@ -16,494 +11,542 @@ $conn = new mysqli($servername, $username, $password, $dbname);
 if ($conn->connect_error) { die("Kết nối thất bại: " . $conn->connect_error); }
 $conn->set_charset('utf8mb4');
 
-// ================== KHAI BÁO NAMESPACE CHO PhpSpreadsheet (PHẢI ở mức file) ==================
+// ================== PhpSpreadsheet ==================
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
-use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-// ================== PhpSpreadsheet (chỉ load khi cần) ==================
 $WILL_EXPORT = (isset($_GET['export']) && $_GET['export'] === 'excel');
-if ($WILL_EXPORT) {
-  require __DIR__ . '/vendor/autoload.php';
-}
+if ($WILL_EXPORT) { require __DIR__ . '/vendor/autoload.php'; }
 
 // ================== Helpers ==================
 function esc($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 function intv($v){ return (int)($v ?? 0); }
 function to_ymd($dmy){
-  $dmy = trim((string)$dmy);
-  if ($dmy === '') return null;
   $dt = DateTime::createFromFormat('d/m/Y', $dmy);
   return $dt ? $dt->format('Y-m-d') : null;
 }
 
-// ========= ZONE CONFIG =========
-// Chuẩn hoá danh sách branch được phép theo từng vùng.
-// Bạn có thể thêm/bớt biến thể tên chi nhánh cho khớp dữ liệu thực tế.
 $ZONE_BRANCHES = [
-  'Đơn hàng Vinh' => [
-    'KUCHEN VINH','HUROM VINH',
-    'KUCHEN Vinh','HUROM Vinh',
-    'VINH KUCHEN','VINH HUROM',
-  ],
-  'Đơn hàng HCM' => [
-    'KUCHEN HCM','HUROM HCM',
-    'KUCHEN TP.HCM','HUROM TP.HCM',
-    'KUCHEN HO CHI MINH','HUROM HO CHI MINH',
-  ],
-  'Đơn hàng HaNoi' => [
-    'KUCHEN HÀ NỘI','HUROM HÀ NỘI',
-    'KUCHEN HANOI','HUROM HANOI',
-    'KUCHEN HN','HUROM HN',
-  ],
+  'Đơn hàng Vinh' => ['KUCHEN VINH','HUROM VINH','KUCHEN Vinh','HUROM Vinh','VINH KUCHEN','VINH HUROM'],
+  'Đơn hàng HCM'  => ['KUCHEN HCM','HUROM HCM','KUCHEN TP.HCM','HUROM TP.HCM','KUCHEN HO CHI MINH','HUROM HO CHI MINH'],
+  'Đơn hàng HaNoi'=> ['KUCHEN HÀ NỘI','HUROM HÀ NỘI','KUCHEN HANOI','HUROM HANOI','KUCHEN HN','HUROM HN'],
 ];
 
-function current_position(): string {
-  return trim((string)($_SESSION['position'] ?? ''));
-}
+function current_position(){ return trim($_SESSION['position'] ?? ''); }
+function allowed_branches_for_position($pos,$map){ return $map[$pos] ?? []; }
+function append_zone_filter($where,&$params,&$types,$pos,$map){
+  $allowed = allowed_branches_for_position($pos,$map);
+  if (empty($allowed)) return $where;
 
-function allowed_branches_for_position(string $pos, array $zoneMap): array {
-  return $zoneMap[$pos] ?? []; // empty => admin/không giới hạn
-}
+  $place = implode(',', array_fill(0,count($allowed),'?'));
+  $where .= " AND COALESCE(branch,'') IN ($place) ";
+  foreach($allowed as $b){ $params[]=$b; $types.='s'; }
 
-// Thêm điều kiện WHERE theo zone (nếu có)
-function append_zone_filter(string $where, array &$params, string &$types, string $pos, array $zoneMap): string {
-  $allowed = allowed_branches_for_position($pos, $zoneMap);
-  if (empty($allowed)) return $where; // không giới hạn (admin)
-  // Tạo mệnh đề IN động
-  $placeholders = implode(',', array_fill(0, count($allowed), '?'));
-  $where .= " AND COALESCE(branch,'') IN ($placeholders) ";
-  foreach ($allowed as $b) { $params[] = $b; $types .= 's'; }
   return $where;
 }
-
-// Kiểm tra quyền phê duyệt theo branch
-function can_approve_branch(string $pos, string $branch, array $zoneMap): bool {
-  $allowed = allowed_branches_for_position($pos, $zoneMap);
-  if (empty($allowed)) return true; // admin/general → được
-  return in_array($branch, $allowed, true);
+function can_approve_branch($pos,$branch,$map){
+  $allowed = allowed_branches_for_position($pos,$map);
+  return empty($allowed) ? true : in_array($branch,$allowed,true);
 }
 
-// ========== Group key & merge theo replacement ==========
-function build_group_key(array $row, string $replacementSet){
+function build_group_key($row,$replacementSet){
   $parts = [
-    mb_strtolower(trim($row['product'] ?? ''), 'UTF-8'),
-    mb_strtolower(trim($row['serial_number'] ?? ''), 'UTF-8'),
-    mb_strtolower(trim($row['full_name'] ?? ''), 'UTF-8'),
-    mb_strtolower(trim($row['phone_number'] ?? ''), 'UTF-8'),
-    mb_strtolower(trim($row['staff_received'] ?? ''), 'UTF-8'),
-    mb_strtolower(trim($row['branch'] ?? ''), 'UTF-8'),
-    mb_strtolower(trim($row['error_type'] ?? ''), 'UTF-8'),   // ✅ thêm dòng này
-    mb_strtolower(trim($replacementSet), 'UTF-8'),
+    mb_strtolower(trim($row['product'] ?? ''),'UTF-8'),
+    mb_strtolower(trim($row['serial_number'] ?? ''),'UTF-8'),
+    mb_strtolower(trim($row['full_name'] ?? ''),'UTF-8'),
+    mb_strtolower(trim($row['phone_number'] ?? ''),'UTF-8'),
+    mb_strtolower(trim($row['staff_received'] ?? ''),'UTF-8'),
+    mb_strtolower(trim($row['branch'] ?? ''),'UTF-8'),
+    mb_strtolower(trim($row['error_type'] ?? ''),'UTF-8'),
+    mb_strtolower(trim($replacementSet),'UTF-8'),
   ];
   return hash('sha256', implode('||', $parts));
 }
 
-
-
 function fetch_replacements_map(mysqli $conn, array $historyIds): array {
-  $map = [];
-  if (empty($historyIds)) return $map;
+  if (empty($historyIds)) return [];
 
-  $place = implode(',', array_fill(0, count($historyIds), '?'));
+  $place = implode(',', array_fill(0,count($historyIds),'?'));
   $types = str_repeat('i', count($historyIds));
-  $sql = "SELECT warranty_request_history_id AS hid, replacement
-          FROM warranty_request_details_history
-          WHERE warranty_request_history_id IN ($place)";
-  $stmt = $conn->prepare($sql);
+  $sql   = "SELECT warranty_request_history_id AS hid, replacement
+            FROM warranty_request_details_history
+            WHERE warranty_request_history_id IN ($place)";
 
-  // bind dynamic
+  $stmt = $conn->prepare($sql);
   $bind = [$types];
-  foreach ($historyIds as $i) { $bind[] = $i; }
-  $refs = [];
-  foreach ($bind as $k => $v) { $refs[$k] = &$bind[$k]; }
-  call_user_func_array([$stmt, 'bind_param'], $refs);
+  foreach($historyIds as $i){ $bind[]=$i; }
+  $refs=[]; foreach($bind as $k=>$v){ $refs[$k]=&$bind[$k]; }
+  call_user_func_array([$stmt,'bind_param'],$refs);
 
   $stmt->execute();
   $rs = $stmt->get_result();
-  while($r = $rs->fetch_assoc()){
-    $hid = (int)$r['hid'];
-    $name = trim((string)($r['replacement'] ?? ''));
-    if ($name !== '') {
-      $map[$hid][] = $name;
-    }
+
+  $map = [];
+  while($r=$rs->fetch_assoc()){
+    $hid=(int)$r['hid'];
+    $name=trim((string)($r['replacement']??''));
+    if($name!==''){ $map[$hid][]=$name; }
   }
   $stmt->close();
 
-  foreach ($map as $hid => $arr) {
-    $arr = array_filter(array_map(function($x){ return trim((string)$x); }, $arr), fn($x)=>$x!=='');
-    $arr = array_values(array_unique($arr));
-    sort($arr, SORT_NATURAL | SORT_FLAG_CASE);
-    $map[$hid] = $arr;
+  foreach($map as $hid=>$arr){
+    $arr=array_filter(array_map('trim',$arr), fn($x)=>$x!=='');
+    $arr=array_values(array_unique($arr));
+    sort($arr,SORT_NATURAL|SORT_FLAG_CASE);
+    $map[$hid]=$arr;
   }
   return $map;
 }
 
-function merge_rows_with_replacements(array $rows, array $repMap): array {
-  $out = [];
-  $seen = [];
-  foreach ($rows as $row) {
-    $hid = (int)($row['id'] ?? 0);
-    $reps = $repMap[$hid] ?? [];
-    $repsText = empty($reps) ? '' : implode(' | ', $reps);
-    $key = build_group_key($row, $repsText);
+function merge_rows_with_replacements(array $rows, array $repMap){
+  $out=[]; $seen=[];
 
-    if (!isset($seen[$key])) {
-      $row['aggregated_ids'] = [$hid];
-      $row['dup_count']      = 1;
-      $row['replacements_text'] = $repsText;
-      $seen[$key] = $key;
-      $out[$key]  = $row;
+  foreach($rows as $row){
+    $hid=(int)$row['id'];
+    $reps=$repMap[$hid] ?? [];
+    $set = implode(' | ',$reps);
+    $key = build_group_key($row,$set);
+
+    if(!isset($seen[$key])){
+      $row['aggregated_ids']=[$hid];
+      $row['dup_count']=1;
+      $row['replacements_text']=$set;
+      $seen[$key]=$key;
+      $out[$key]=$row;
     } else {
-      $out[$key]['dup_count'] += 1;
-      $out[$key]['aggregated_ids'][] = $hid;
+      $out[$key]['dup_count']++;
+      $out[$key]['aggregated_ids'][]=$hid;
     }
   }
 
-  foreach ($out as &$r) {
-    $ids = $r['aggregated_ids'] ?? [];
-    sort($ids);
-    $r['aggregated_ids_text'] = implode(',', $ids);
+  foreach($out as &$r){
+    sort($r['aggregated_ids']);
+    $r['aggregated_ids_text']=implode(',',$r['aggregated_ids']);
   }
   unset($r);
 
-  $rowsMerged = array_values($out);
-  usort($rowsMerged, function($a,$b){
-    $da = $a['Ngaytao'] ?? '';
-    $db = $b['Ngaytao'] ?? '';
-    if ($da === $db) {
-      return ((int)$b['id']) <=> ((int)$a['id']);
+  $out=array_values($out);
+  usort($out,function($a,$b){
+    if($a['Ngaytao']===$b['Ngaytao']){
+      return $b['id'] <=> $a['id'];
     }
-    return strcmp($db, $da); // DESC
+    return strcmp($b['Ngaytao'],$a['Ngaytao']);
   });
-  return $rowsMerged;
-}
 
-// ================== AJAX: Load chi tiết theo request_id ==================
+  return $out;
+}
+/* ================== AJAX: Load chi tiết theo request_id ================== */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'details') {
   header('Content-Type: application/json; charset=UTF-8');
   $reqId = intv($_GET['id'] ?? 0);
 
-  // Lấy request
-  $sqlReq = "SELECT
-                id, serial_number, serial_thanmay, product,
-                full_name, phone_number, address,
-                staff_received,
-                DATE_FORMAT(received_date, '%d/%m/%Y %H:%i')   AS received_date_fmt,
-                DATE_FORMAT(warranty_end, '%d/%m/%Y %H:%i')    AS warranty_end_fmt,
-                branch,
-                DATE_FORMAT(return_date, '%d/%m/%Y %H:%i')     AS return_date_fmt,
-                DATE_FORMAT(shipment_date, '%d/%m/%Y %H:%i')   AS shipment_date_fmt,
-                initial_fault_condition, product_fault_condition,
-                product_quantity_description,
-                image_upload, video_upload,
-                type, collaborator_id, collaborator_name, collaborator_phone, collaborator_address,
-                save_img, save_video,
-                DATE_FORMAT(Ngaytao, '%d/%m/%Y %H:%i')         AS Ngaytao_fmt,
-                status, view, print_request,
-                approved_by
+  $sqlReq = "SELECT * ,
+                DATE_FORMAT(received_date,'%d/%m/%Y %H:%i') AS received_date_fmt,
+                DATE_FORMAT(warranty_end,'%d/%m/%Y %H:%i') AS warranty_end_fmt,
+                DATE_FORMAT(return_date,'%d/%m/%Y %H:%i') AS return_date_fmt,
+                DATE_FORMAT(shipment_date,'%d/%m/%Y %H:%i') AS shipment_date_fmt,
+                DATE_FORMAT(Ngaytao,'%d/%m/%Y %H:%i') AS Ngaytao_fmt
              FROM warranty_requests_history
              WHERE id = ?";
+
   $stmtReq = $conn->prepare($sqlReq);
   $stmtReq->bind_param('i', $reqId);
   $stmtReq->execute();
-  $resReq = $stmtReq->get_result();
-  $req = $resReq->fetch_assoc();
+  $req = $stmtReq->get_result()->fetch_assoc();
   $stmtReq->close();
 
-  if (!$req) { echo json_encode(['ok'=>false, 'error'=>'Không tìm thấy yêu cầu hợp lệ.']); exit; }
+  if (!$req) { echo json_encode(['ok'=>false]); exit; }
 
-  // Kiểm tra quyền xem (theo zone); nếu không có quyền → vẫn cho xem chi tiết, chỉ hạn chế xác nhận (logic dưới phần save).
-  // Nếu muốn chặn xem ngoài zone, mở comment dưới:
-  // if (!can_approve_branch(current_position(), (string)$req['branch'], $ZONE_BRANCHES)) {
-  //   echo json_encode(['ok'=>false, 'error'=>'Bạn không có quyền xem yêu cầu ngoài vùng.']); exit;
-  // }
+  // Lấy warranty_request_id để lấy phụ kiện từ bảng hiện hành
+  $warranty_request_id = (int)$req['warranty_id'];
 
-  $sqlDt = "SELECT
-              id, warranty_request_id, error_type, solution, replacement, quantity, unit_price
-            FROM warranty_request_details_history
-            WHERE warranty_request_history_id = ?
+  $sqlDt = "SELECT id, error_type, solution, replacement, quantity, unit_price
+            FROM warranty_request_details
+            WHERE warranty_request_id = ?
             ORDER BY id ASC";
-  $stmtDt = $conn->prepare($sqlDt);
-  $stmtDt->bind_param('i', $reqId);
-  $stmtDt->execute();
-  $resDt = $stmtDt->get_result();
-  $rows = [];
-  while ($r = $resDt->fetch_assoc()) { $rows[] = $r; }
-  $stmtDt->close();
+  $stmt = $conn->prepare($sqlDt);
+  $stmt->bind_param('i', $warranty_request_id);
+  $stmt->execute();
 
-  echo json_encode(['ok'=>true, 'request'=>$req, 'details'=>$rows], JSON_UNESCAPED_UNICODE);
+  $details = [];
+  $rs = $stmt->get_result();
+  while ($r = $rs->fetch_assoc()) { $details[] = $r; }
+  $stmt->close();
+
+  echo json_encode(['ok'=>true, 'request'=>$req, 'details'=>$details], JSON_UNESCAPED_UNICODE);
   exit;
 }
 
-// ================== AJAX: Lưu chi tiết (UPSERT) + PHÂN QUYỀN THEO VÙNG ==================
+
+/* ================== AJAX SAVE DETAILS (LƯU LỊCH SỬ) ================== */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'save_details') {
   header('Content-Type: application/json; charset=UTF-8');
-  $raw  = file_get_contents('php://input');
-  $data = json_decode($raw, true);
+  $rawData = file_get_contents('php://input');
+  $data = json_decode($rawData, true);
 
-  $reqId = intv($data['id'] ?? 0);
-  $items = $data['items'] ?? [];
+  $historyId = intv($data['id'] ?? 0);
+  $items     = $data['items'] ?? [];
 
-  if ($reqId <= 0) { echo json_encode(['ok'=>false, 'error'=>'Thiếu ID yêu cầu']); exit; }
-
-  // Lấy branch của request để kiểm tra quyền duyệt
-  $stmtChk = $conn->prepare("SELECT branch FROM warranty_requests_history WHERE id = ?");
-  $stmtChk->bind_param('i', $reqId);
-  $stmtChk->execute();
-  $branchRow = $stmtChk->get_result()->fetch_assoc();
-  $stmtChk->close();
-
-  $branchVal = (string)($branchRow['branch'] ?? '');
-  if (!can_approve_branch(current_position(), $branchVal, $ZONE_BRANCHES)) {
-    echo json_encode(['ok'=>false, 'error'=>'Bạn không có quyền duyệt yêu cầu thuộc chi nhánh ngoài vùng.']); exit;
+  if ($historyId <= 0) {
+    echo json_encode(['ok'=>false,'error'=>'Thiếu ID']); exit;
   }
 
+  // Kiểm tra vùng
+  $stmt = $conn->prepare("SELECT branch, warranty_id FROM warranty_requests_history WHERE id=?");
+  $stmt->bind_param("i", $historyId);
+  $stmt->execute();
+  $row = $stmt->get_result()->fetch_assoc();
+  $stmt->close();
+
+  if (!$row) {
+    echo json_encode(['ok'=>false,'error'=>'Không tìm thấy yêu cầu']); exit;
+  }
+
+  $branch = $row['branch'];
+  $warranty_request_id = (int)$row['warranty_id'];
+
+  if (!can_approve_branch(current_position(), $branch, $ZONE_BRANCHES)) {
+    echo json_encode(['ok'=>false,'error'=>'Không có quyền duyệt ngoài vùng']); exit;
+  }
+
+  // Thực thi lưu lịch sử
   $conn->begin_transaction();
+
   try {
-    // 1) Lấy danh sách id hiện có + lấy sẵn warranty_request_id nếu có
+
+    // Lấy danh sách cũ
     $oldIds = [];
-    $wrid   = 0;
-    $q1 = $conn->prepare("SELECT id, warranty_request_id FROM warranty_request_details_history WHERE warranty_request_history_id = ?");
-    $q1->bind_param('i', $reqId);
-    $q1->execute();
-    $r1 = $q1->get_result();
-    while($row = $r1->fetch_assoc()){
-      $oldIds[] = (int)$row['id'];
-      if(!$wrid && !empty($row['warranty_request_id'])) $wrid = (int)$row['warranty_request_id'];
-    }
-    $q1->close();
+    $q = $conn->prepare("SELECT id FROM warranty_request_details_history WHERE warranty_request_history_id=?");
+    $q->bind_param("i", $historyId);
+    $q->execute();
+    $res = $q->get_result();
+    while($r=$res->fetch_assoc()) $oldIds[]=(int)$r['id'];
+    $q->close();
 
-    if(!$wrid){ $wrid = $reqId; }
-
-    // 2) Upsert
     $incomingIds = [];
-    foreach ($items as $it) {
+
+    foreach($items as $it) {
       $detailId = intv($it['id'] ?? 0);
-      $name     = trim((string)($it['name'] ?? ''));
+      $name     = trim($it['name'] ?? '');
       $qty      = (int)($it['qty'] ?? 0);
       $price    = (float)($it['price'] ?? 0);
-      $err      = trim((string)($it['err'] ?? ''));
-      $sol      = trim((string)($it['sol'] ?? ''));
+      $err      = trim($it['err'] ?? '');
+      $sol      = trim($it['sol'] ?? '');
 
-      // Cho phép lưu khi có error_type hoặc replacement
-if (($name === '' && $err === '') || $qty <= 0) { continue; }
-
+      if (($name==='' && $err==='') || $qty<=0) continue;
 
       if ($detailId > 0) {
         $incomingIds[] = $detailId;
-        $upd = $conn->prepare("
-          UPDATE warranty_request_details_history
-             SET error_type = ?, solution = ?, replacement = ?, quantity = ?, unit_price = ?
-           WHERE id = ? AND warranty_request_history_id = ?
+
+        $u = $conn->prepare("
+            UPDATE warranty_request_details_history
+               SET error_type=?, solution=?, replacement=?, quantity=?, unit_price=?
+             WHERE id=? AND warranty_request_history_id=?
         ");
-        $upd->bind_param('sssidii', $err, $sol, $name, $qty, $price, $detailId, $reqId);
-        $upd->execute();
-        $upd->close();
+        $u->bind_param("sssidii", $err, $sol, $name, $qty, $price, $detailId, $historyId);
+        $u->execute();
+        $u->close();
+
       } else {
-        $ins = $conn->prepare("
-          INSERT INTO warranty_request_details_history
-            (warranty_request_history_id, warranty_request_id, error_type, solution, replacement, quantity, unit_price)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+        $i = $conn->prepare("
+            INSERT INTO warranty_request_details_history
+              (warranty_request_history_id, warranty_request_id, error_type, solution, replacement, quantity, unit_price)
+            VALUES (?,?,?,?,?,?,?)
         ");
-        $ins->bind_param('iisssid', $reqId, $wrid, $err, $sol, $name, $qty, $price);
-        $ins->execute();
-        $ins->close();
+        $i->bind_param("iisssid", $historyId, $warranty_request_id, $err, $sol, $name, $qty, $price);
+        $i->execute();
+        $i->close();
       }
     }
 
-    // 3) DELETE các dòng đã bị xoá, nhưng giữ lại nếu solution = 'Sửa chữa tại chỗ (lỗi nhẹ)'
-if (!empty($oldIds)) {
-  $toDelete = array_values(array_diff($oldIds, $incomingIds));
-  if (!empty($toDelete)) {
-    $place = implode(',', array_fill(0, count($toDelete), '?'));
-    $types = str_repeat('i', count($toDelete) + 1); // +1 cho reqId
-    $sqlDel = "DELETE FROM warranty_request_details_history
-               WHERE warranty_request_history_id = ? 
-                 AND id IN ($place)
-                 AND solution <> 'Sửa chữa tại chỗ (lỗi nhẹ)'";   // ✅ giữ lại dòng sửa chữa nhẹ
-    $stmtDel = $conn->prepare($sqlDel);
-    $bindParams = [$types, $reqId];
-    foreach ($toDelete as $x) { $bindParams[] = $x; }
-    $refs = [];
-    foreach ($bindParams as $k => $v) { $refs[$k] = &$bindParams[$k]; }
-    call_user_func_array([$stmtDel, 'bind_param'], $refs);
-    $stmtDel->execute();
-    $stmtDel->close();
-  }
-}
+    // Xoá dòng bị loại
+    if (!empty($oldIds)) {
+      $deleteIds = array_values(array_diff($oldIds, $incomingIds));
+      if (!empty($deleteIds)) {
+        $ph = implode(",", array_fill(0,count($deleteIds),'?'));
+        $types = str_repeat("i", count($deleteIds)+1);
 
+        $sql = "DELETE FROM warranty_request_details_history 
+                WHERE warranty_request_history_id=? 
+                AND id IN ($ph)
+                AND solution <> 'Sửa chữa tại chỗ (lỗi nhẹ)'";
+
+        $stmt = $conn->prepare($sql);
+        $bind = [$types, $historyId];
+        foreach ($deleteIds as $d) $bind[] = $d;
+
+        $refs=[];
+        foreach ($bind as $k=>$v) $refs[$k]=&$bind[$k];
+        call_user_func_array([$stmt,'bind_param'],$refs);
+
+        $stmt->execute();
+        $stmt->close();
+      }
+    }
 
     $conn->commit();
     echo json_encode(['ok'=>true]);
+
   } catch (Throwable $e) {
     $conn->rollback();
-    echo json_encode(['ok'=>false, 'error'=>'Lưu thất bại: '.$e->getMessage()]);
+    echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
   }
+
   exit;
 }
-
-// ================== ACTION: Xác nhận đã nhận lệnh in (có kiểm tra vùng) ==================
+/* ================== ACTION: Xác nhận đã nhận lệnh in (DUYỆT) ================== */
 $flash = '';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ack_print') {
-  $reqId = intv($_POST['id'] ?? 0);
-  $approver = trim((string)($_SESSION['position'] ?? 'unknown'));
 
-  // Lấy branch để check quyền
-  $stmtB = $conn->prepare("SELECT branch FROM warranty_requests_history WHERE id = ?");
-  $stmtB->bind_param('i', $reqId);
-  $stmtB->execute();
-  $branchRow = $stmtB->get_result()->fetch_assoc();
-  $stmtB->close();
+    $historyId = intv($_POST['id'] ?? 0);
+    $approver  = trim($_SESSION['position'] ?? 'unknown');
 
-  if (!$branchRow) {
-    $flash = 'Yêu cầu không hợp lệ.';
-  } else {
-    $branchVal = (string)$branchRow['branch'];
-    if (!can_approve_branch($approver, $branchVal, $ZONE_BRANCHES)) {
-      $flash = 'Bạn không có quyền xác nhận yêu cầu thuộc chi nhánh ngoài vùng.';
+    // 1. Lấy branch + warranty_id
+    $stmt = $conn->prepare("SELECT branch, warranty_id FROM warranty_requests_history WHERE id=?");
+    $stmt->bind_param("i", $historyId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$row) {
+        $flash = 'Yêu cầu không tồn tại.';
     } else {
-      $sqlAck = "UPDATE warranty_requests_history
-                 SET print_request = 2, approved_by = ?
-                 WHERE id = ?";
-      $stmt = $conn->prepare($sqlAck);
-      $stmt->bind_param('si', $approver, $reqId);
-      $ok = $stmt->execute();
-      $stmt->close();
-      $flash = $ok ? ('Đã xác nhận và ghi nhận người duyệt: ' . esc($approver) . ' cho yêu cầu #'.$reqId)
-                   : 'Xác nhận thất bại hoặc yêu cầu không hợp lệ.';
+
+        $branch = $row['branch'];
+        $warrantyRequestId = (int)$row['warranty_id'];
+
+        // 2. Kiểm tra quyền duyệt
+        if (!can_approve_branch($approver, $branch, $ZONE_BRANCHES)) {
+            $flash = 'Bạn không có quyền duyệt yêu cầu ngoài vùng.';
+        } else {
+
+            /* =====================================================
+             *  🔥 BƯỚC QUAN TRỌNG NHẤT:
+             *  COPY PHỤ KIỆN TỪ warranty_request_details
+             *  SANG warranty_request_details_history
+             *  MỖI KHI XÁC NHẬN DUYỆT
+             * ===================================================== */
+
+            $conn->begin_transaction();
+
+            try {
+                // 3. Xoá toàn bộ phụ kiện cũ của history
+                $del = $conn->prepare("
+                    DELETE FROM warranty_request_details_history
+                    WHERE warranty_request_history_id = ?
+                ");
+                $del->bind_param("i", $historyId);
+                $del->execute();
+                $del->close();
+
+                // 4. Lấy toàn bộ phụ kiện từ bảng chính
+                $q = $conn->prepare("
+                    SELECT error_type, solution, replacement, quantity, unit_price
+                    FROM warranty_request_details
+                    WHERE warranty_request_id = ?
+                ");
+                $q->bind_param("i", $warrantyRequestId);
+                $q->execute();
+                $rs = $q->get_result();
+                $details = [];
+                while($r = $rs->fetch_assoc()) $details[] = $r;
+                $q->close();
+
+                // 5. Chèn lại toàn bộ phụ kiện vào history
+                if (!empty($details)) {
+                    $ins = $conn->prepare("
+                        INSERT INTO warranty_request_details_history
+                          (warranty_request_history_id, warranty_request_id, error_type, solution, replacement, quantity, unit_price)
+                        VALUES (?,?,?,?,?,?,?)
+                    ");
+
+                    foreach ($details as $d) {
+                        $err  = trim($d['error_type'] ?? '');
+                        $sol  = trim($d['solution'] ?? '');
+                        $rep  = trim($d['replacement'] ?? '');
+                        $qty  = (int)$d['quantity'];
+                        $price= (float)$d['unit_price'];
+
+                        $ins->bind_param("iisssid",
+                            $historyId, $warrantyRequestId,
+                            $err, $sol, $rep, $qty, $price
+                        );
+                        $ins->execute();
+                    }
+                    $ins->close();
+                }
+
+                // 6. Cập nhật trạng thái duyệt
+                $u = $conn->prepare("
+                    UPDATE warranty_requests_history
+                    SET print_request = 2,
+                        approved_by = ?
+                    WHERE id = ?
+                ");
+                $u->bind_param("si", $approver, $historyId);
+                $u->execute();
+                $u->close();
+
+                $conn->commit();
+                $flash = "Đã xác nhận duyệt & đồng bộ phụ kiện thành công cho yêu cầu #{$historyId}";
+
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $flash = 'Lỗi khi duyệt: ' . $e->getMessage();
+            }
+        }
     }
-  }
 }
+/* ================== INPUT FILTER ================== */
+$warranty_id = trim($_GET['warranty_id'] ?? '');
+$phone       = trim($_GET['phone'] ?? '');
+$staff       = trim($_GET['staff'] ?? '');
+$df          = trim($_GET['df'] ?? '');
+$dt          = trim($_GET['dt'] ?? '');
 
-// ================== Input lọc & phân trang ==================
-$phone = trim($_GET['phone'] ?? '');
-$staff = trim($_GET['staff'] ?? '');
-$df    = trim($_GET['df'] ?? '');
-$dt    = trim($_GET['dt'] ?? '');
-
-$page   = max(1, (int)($_GET['page'] ?? 1));
-$limit  = 15;
+$page = max(1, (int)($_GET['page'] ?? 1));
+$limit = 15;
 $offset = ($page - 1) * $limit;
 
 $where  = " WHERE 1=1 ";
 $params = [];
 $types  = '';
 
+if ($warranty_id !== '') {
+  $where .= " AND COALESCE(warranty_id,'') LIKE CONCAT('%', ?, '%') ";
+  $params[] = $warranty_id; $types .= 's';
+}
 if ($phone !== '') {
-  $where  .= " AND COALESCE(phone_number,'') LIKE CONCAT('%', ?, '%') ";
+  $where .= " AND COALESCE(phone_number,'') LIKE CONCAT('%', ?, '%') ";
   $params[] = $phone; $types .= 's';
 }
 if ($staff !== '') {
-  $where  .= " AND COALESCE(staff_received,'') LIKE CONCAT('%', ?, '%') ";
+  $where .= " AND COALESCE(staff_received,'') LIKE CONCAT('%', ?, '%') ";
   $params[] = $staff; $types .= 's';
 }
+
 $dfYmd = to_ymd($df);
 $dtYmd = to_ymd($dt);
+
 if ($dfYmd && $dtYmd) {
-  $where  .= " AND DATE(Ngaytao) BETWEEN ? AND ? ";
-  array_push($params, $dfYmd, $dtYmd); $types .= 'ss';
+  $where .= " AND DATE(Ngaytao) BETWEEN ? AND ? ";
+  array_push($params, $dfYmd, $dtYmd);
+  $types .= 'ss';
 } elseif ($dfYmd) {
-  $where  .= " AND DATE(Ngaytao) >= ? ";
+  $where .= " AND DATE(Ngaytao) >= ? ";
   $params[] = $dfYmd; $types .= 's';
 } elseif ($dtYmd) {
-  $where  .= " AND DATE(Ngaytao) <= ? ";
+  $where .= " AND DATE(Ngaytao) <= ? ";
   $params[] = $dtYmd; $types .= 's';
 }
 
-// Thêm filter theo zone
+// áp dụng zone filter
 $position = current_position();
 $where = append_zone_filter($where, $params, $types, $position, $ZONE_BRANCHES);
 
-// ======= Count (trước gộp) =======
-$sqlCount = "SELECT COUNT(*) AS cnt
-             FROM warranty_requests_history
-             {$where}";
-$stmtC = $conn->prepare($sqlCount);
-if ($types) { $stmtC->bind_param($types, ...$params); }
-$stmtC->execute();
-$total_before_merge = (int)($stmtC->get_result()->fetch_assoc()['cnt'] ?? 0);
-$stmtC->close();
-$totalPages = max(1, (int)ceil($total_before_merge / $limit));
 
-// ======= Lấy danh sách (theo trang) =======
-$sqlList = "SELECT
-              id, serial_number, product,
-              full_name, phone_number, staff_received, branch,
-              status,
-              Ngaytao,
-              DATE_FORMAT(Ngaytao, '%d/%m/%Y %H:%i') AS Ngaytao_fmt,
-              approved_by, print_request
-            FROM warranty_requests_history
-            {$where}
-            ORDER BY Ngaytao DESC, id DESC
-            LIMIT ? OFFSET ?";
+/* ================== COUNT ================== */
+$sqlCount = "SELECT COUNT(*) AS cnt FROM warranty_requests_history {$where}";
+$stmtC = $conn->prepare($sqlCount);
+if ($types) $stmtC->bind_param($types, ...$params);
+$stmtC->execute();
+$total_before_merge = (int)$stmtC->get_result()->fetch_assoc()['cnt'];
+$stmtC->close();
+
+$totalPages = max(1, ceil($total_before_merge / $limit));
+
+
+/* ================== LIST HISTORY ================== */
+$sqlList = "
+  SELECT 
+    id, warranty_id, serial_number, product,
+    full_name, phone_number, staff_received, branch,
+    status, Ngaytao,
+    DATE_FORMAT(Ngaytao,'%d/%m/%Y %H:%i') AS Ngaytao_fmt,
+    print_request, approved_by
+  FROM warranty_requests_history
+  {$where}
+  ORDER BY Ngaytao DESC, id DESC
+  LIMIT ? OFFSET ?
+";
+
 $stmtL = $conn->prepare($sqlList);
 if ($types) {
-  $types2 = $types.'ii';
+  $types2 = $types . "ii";
   $bind = array_merge($params, [$limit, $offset]);
   $stmtL->bind_param($types2, ...$bind);
 } else {
-  $stmtL->bind_param('ii', $limit, $offset);
+  $stmtL->bind_param("ii", $limit, $offset);
 }
 $stmtL->execute();
-$tmpRes = $stmtL->get_result();
+$rs = $stmtL->get_result();
 
 $rawRows = [];
 $idsThisPage = [];
-while($r = $tmpRes->fetch_assoc()){
+while ($r = $rs->fetch_assoc()) {
   $rawRows[] = $r;
   $idsThisPage[] = (int)$r['id'];
 }
 $stmtL->close();
 
-// Map replacement cho các id trong trang
+/* ================== LẤY LINH KIỆN CHO TRANG HIỆN TẠI ================== */
 $repMapPage = fetch_replacements_map($conn, $idsThisPage);
-// Gộp trong phạm vi trang
+
+/* ================== GỘP DỮ LIỆU ================== */
 $rowsMergedPage = merge_rows_with_replacements($rawRows, $repMapPage);
 $total_after_merge_this_page = count($rowsMergedPage);
 
-// ================== EXPORT EXCEL (áp dụng cùng filter zone) ==================
+
+/* ================== EXPORT EXCEL ================== */
 if ($WILL_EXPORT) {
-  $sqlAll = "SELECT
-                id, serial_number, product,
-                full_name, phone_number, staff_received, branch,
-                status,
-                Ngaytao,
-                DATE_FORMAT(Ngaytao, '%d/%m/%Y %H:%i') AS Ngaytao_fmt,
-                approved_by, print_request
-             FROM warranty_requests_history
-             {$where} 
-             AND print_request = 2
-             ORDER BY Ngaytao DESC, id DESC";
+
+  $sqlAll = "
+    SELECT 
+      id, warranty_id, serial_number, product,
+      full_name, phone_number, staff_received, branch,
+      status, Ngaytao,
+      DATE_FORMAT(Ngaytao,'%d/%m/%Y %H:%i') AS Ngaytao_fmt,
+      print_request, approved_by
+    FROM warranty_requests_history
+    {$where}
+      AND print_request = 2
+    ORDER BY Ngaytao DESC, id DESC
+  ";
+
   $stmtAll = $conn->prepare($sqlAll);
-  if ($types) { $stmtAll->bind_param($types, ...$params); }
+  if ($types) $stmtAll->bind_param($types, ...$params);
   $stmtAll->execute();
   $rsAll = $stmtAll->get_result();
+
   $allRows = [];
   $allIds  = [];
-  while($row = $rsAll->fetch_assoc()){
+  while ($row = $rsAll->fetch_assoc()) {
     $allRows[] = $row;
     $allIds[]  = (int)$row['id'];
   }
   $stmtAll->close();
 
+  // Map linh kiện từ history
   $repMapAll = fetch_replacements_map($conn, $allIds);
-  $rowsMergedAll = merge_rows_with_replacements($allRows, $repMapAll);
 
-  // Tạo file Excel
+  // Gộp dữ liệu xuất Excel
+  $mergedExport = merge_rows_with_replacements($allRows, $repMapAll);
+
+
+  /* ================== TẠO FILE EXCEL ================== */
   $spreadsheet = new Spreadsheet();
   $sheet = $spreadsheet->getActiveSheet();
-  $sheet->setTitle('Bao_cao_xuat_kho');
+  $sheet->setTitle("Bao_cao_bao_hanh");
 
   $headers = [
     'A' => 'STT',
-    'B' => 'ID (đại diện)',
-    'C' => 'Danh sách ID (gộp)',
-    'D' => 'Số lần lặp (gộp)',
+    'B' => 'ID (History)',
+    'C' => 'Danh sách ID gộp',
+    'D' => 'Số lần lặp',
     'E' => 'Sản phẩm',
     'F' => 'Serial',
     'G' => 'Khách hàng',
@@ -511,55 +554,59 @@ if ($WILL_EXPORT) {
     'I' => 'Kỹ thuật viên',
     'J' => 'Chi nhánh',
     'K' => 'Trạng thái',
-    'L' => 'Ngày gửi yêu cầu',
+    'L' => 'Ngày tạo',
     'M' => 'Người duyệt',
-    'N' => 'Bộ linh kiện thay thế (đã gộp)'
+    'N' => 'Bộ linh kiện thay thế (history)'
   ];
-  foreach ($headers as $col => $text) {
-    $sheet->setCellValue($col.'1', $text);
+
+  foreach ($headers as $col => $name) {
+    $sheet->setCellValue($col.'1', $name);
   }
 
-  $sheet->getStyle('A1:N1')->getFont()->setBold(true);
-  $sheet->getStyle('A1:N1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-  $sheet->getStyle('A1:N1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('E9F2FF');
-  $sheet->getStyle('A1:N1')->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+  $sheet->getStyle("A1:N1")->getFont()->setBold(true);
+  $sheet->getStyle("A1:N1")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB("E9F2FF");
 
-  $rowIdx = 2; $stt = 1;
-  foreach ($rowsMergedAll as $r) {
-    $sheet->setCellValueExplicit('A'.$rowIdx, $stt, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC);
-    $sheet->setCellValue('B'.$rowIdx, (int)$r['id']);
-    $sheet->setCellValue('C'.$rowIdx, (string)($r['aggregated_ids_text'] ?? (string)$r['id']));
-    $sheet->setCellValue('D'.$rowIdx, (int)($r['dup_count'] ?? 1));
-    $sheet->setCellValue('E'.$rowIdx, $r['product'] ?? '');
-    $sheet->setCellValue('F'.$rowIdx, $r['serial_number'] ?? '');
-    $sheet->setCellValue('G'.$rowIdx, $r['full_name'] ?? '');
-    $sheet->setCellValue('H'.$rowIdx, $r['phone_number'] ?? '');
-    $sheet->setCellValue('I'.$rowIdx, $r['staff_received'] ?? '');
-    $sheet->setCellValue('J'.$rowIdx, $r['branch'] ?? '');
-    $sheet->setCellValue('K'.$rowIdx, $r['status'] ?? '');
-    $sheet->setCellValue('L'.$rowIdx, $r['Ngaytao_fmt'] ?? '');
-    $sheet->setCellValue('M'.$rowIdx, $r['approved_by'] ?? '');
-    $sheet->setCellValue('N'.$rowIdx, $r['replacements_text'] ?? '');
 
-    $sheet->getStyle('A'.$rowIdx.':N'.$rowIdx)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_HAIR);
-    $sheet->getStyle('A'.$rowIdx.':N'.$rowIdx)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+  $rowIdx = 2;
+  $stt = 1;
 
-    $rowIdx++; $stt++;
+  foreach ($mergedExport as $r) {
+
+    $sheet->setCellValue("A{$rowIdx}", $stt);
+    $sheet->setCellValue("B{$rowIdx}", $r['id']);
+    $sheet->setCellValue("C{$rowIdx}", $r['aggregated_ids_text']);
+    $sheet->setCellValue("D{$rowIdx}", $r['dup_count']);
+    $sheet->setCellValue("E{$rowIdx}", $r['product']);
+    $sheet->setCellValue("F{$rowIdx}", $r['serial_number']);
+    $sheet->setCellValue("G{$rowIdx}", $r['full_name']);
+    $sheet->setCellValue("H{$rowIdx}", $r['phone_number']);
+    $sheet->setCellValue("I{$rowIdx}", $r['staff_received']);
+    $sheet->setCellValue("J{$rowIdx}", $r['branch']);
+    $sheet->setCellValue("K{$rowIdx}", $r['status']);
+    $sheet->setCellValue("L{$rowIdx}", $r['Ngaytao_fmt']);
+    $sheet->setCellValue("M{$rowIdx}", $r['approved_by']);
+    $sheet->setCellValue("N{$rowIdx}", $r['replacements_text']); // 🔥 LẤY ĐÚNG LINH KIỆN TỪ history
+
+    $rowIdx++;
+    $stt++;
   }
 
   foreach (range('A','N') as $col) {
     $sheet->getColumnDimension($col)->setAutoSize(true);
   }
 
-  $filename = 'Baocaoxuatkho_linh_kien_bao_hanh'.date('Ymd_His').'.xlsx';
+  $filename = "Bao_cao_bao_hanh_" . date("Ymd_His") . ".xlsx";
+
   header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  header('Content-Disposition: attachment; filename="'.$filename.'"');
+  header("Content-Disposition: attachment; filename=\"{$filename}\"");
   header('Cache-Control: max-age=0');
+
   $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
   $writer->save('php://output');
   exit;
 }
 ?>
+
 <!doctype html>
 <html lang="vi">
 <head>
@@ -569,6 +616,7 @@ if ($WILL_EXPORT) {
 
   <!-- Bootstrap 4 (CDN) -->
   <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 
   <style>
     .table-sticky thead th { position: sticky; top: 0; z-index: 2; background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.05); }
@@ -620,42 +668,90 @@ if ($WILL_EXPORT) {
 
     <!-- FILTER CARD -->
     <div class="card shadow-sm mb-3">
-      <div class="card-body">
-        <form class="form-row" method="get">
-          <div class="col-md-3 mb-2">
-            <label class="small text-muted mb-1">SĐT khách hàng</label>
-            <input type="text" class="form-control" name="phone" value="<?= esc($phone) ?>" placeholder="Ví dụ: 09xx...">
-          </div>
-          <div class="col-md-3 mb-2">
-            <label class="small text-muted mb-1">Tên kỹ thuật viên</label>
-            <input type="text" class="form-control" name="staff" value="<?= esc($staff) ?>" placeholder="Ví dụ: Nguyễn Văn A">
-          </div>
-          <div class="col-md-2 mb-2">
-            <label class="small text-muted mb-1">Từ ngày (d/m/Y)</label>
-            <input type="text" class="form-control" name="df" value="<?= esc($df) ?>" placeholder="01/09/2025">
-          </div>
-          <div class="col-md-2 mb-2">
-            <label class="small text-muted mb-1">Đến ngày (d/m/Y)</label>
-            <input type="text" class="form-control" name="dt" value="<?= esc($dt) ?>" placeholder="10/09/2025">
-          </div>
-          <div class="col-md-2 mb-2 d-flex align-items-end">
-            <button class="btn btn-primary mr-2" type="submit">Lọc</button>
-            <a class="btn btn-outline-secondary mr-2" href="?">Xoá lọc</a>
-            <?php
-              $q = array_filter([
-                'phone'=>$phone ?: null,
-                'staff'=>$staff ?: null,
-                'df'=>$df ?: null,
-                'dt'=>$dt ?: null,
-                'export'=>'excel'
-              ]);
-              $exportUrl = '?'.http_build_query($q);
-            ?>
-            <a class="btn btn-success" href="<?= esc($exportUrl) ?>">Xuất Excel</a>
-          </div>
+    <div class="card-body pb-2">
+
+        <form method="get">
+            <div class="row">
+
+                <!-- LEFT COLUMN: ALL INPUTS -->
+                <div class="col-md-8">
+                    <div class="row g-3">
+
+                        <div class="col-md-4">
+                            <label class="small text-muted mb-1">Mã số phiếu bảo hành</label>
+                            <input type="text" class="form-control" name="warranty_id"
+                                value="<?= esc($warranty_id) ?>" placeholder="Nhập mã phiếu...">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="small text-muted mb-1">SĐT khách hàng</label>
+                            <input type="text" class="form-control" name="phone"
+                                value="<?= esc($phone) ?>" placeholder="09xx...">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="small text-muted mb-1">Tên kỹ thuật viên</label>
+                            <input type="text" class="form-control" name="staff"
+                                value="<?= esc($staff) ?>" placeholder="Nguyễn Văn A">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="small text-muted mb-1">Từ ngày</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
+                                <input type="text" class="form-control" name="df"
+                                    value="<?= esc($df) ?>" placeholder="dd/mm/yyyy">
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="small text-muted mb-1">Đến ngày</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-calendar-event-fill"></i></span>
+                                <input type="text" class="form-control" name="dt"
+                                    value="<?= esc($dt) ?>" placeholder="dd/mm/yyyy">
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN: BUTTONS -->
+                <div class="col-md-4">
+                    <div class="d-flex flex-column h-100 justify-content-start">
+
+                        <button class="btn btn-primary mb-2" type="submit">
+                            <i class="bi bi-funnel-fill"></i> Lọc
+                        </button>
+
+                        <a class="btn btn-outline-secondary mb-2" href="?">
+                            <i class="bi bi-x-circle"></i> Xoá lọc
+                        </a>
+
+                        <?php
+                            $q = array_filter([
+                                'warranty_id' => $warranty_id ?: null,
+                                'phone'       => $phone ?: null,
+                                'staff'       => $staff ?: null,
+                                'df'          => $df ?: null,
+                                'dt'          => $dt ?: null,
+                                'export'      => 'excel'
+                            ]);
+                            $exportUrl = '?' . http_build_query($q);
+                        ?>
+
+                        <a class="btn btn-success" href="<?= esc($exportUrl) ?>">
+                            <i class="bi bi-file-earmark-excel"></i> Xuất Excel
+                        </a>
+
+                    </div>
+                </div>
+
+            </div>
         </form>
-      </div>
+
     </div>
+</div>
 
     <!-- LIST CARD -->
     <div class="card shadow-sm">
@@ -906,8 +1002,12 @@ if ($WILL_EXPORT) {
         let html = `
           <ul class="list-group list-group-flush mb-3">
             <li class="list-group-item d-flex">
-              <div class="mr-3"><strong>ID</strong></div>
+              <div class="mr-3"><strong>STT(yêu cầu in phiếu)</strong></div>
               <div>#${req.id ?? ''}</div>
+            </li>
+            <li class="list-group-item d-flex">
+              <div class="mr-3"><strong>Mã số phiếu bảo hành</strong></div>
+              <div>#${req.warranty_id ?? ''}</div>
             </li>
             <li class="list-group-item">
               <div class="d-flex flex-wrap">
