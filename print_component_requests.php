@@ -4,9 +4,9 @@ date_default_timezone_set('Asia/Ho_Chi_Minh');
 
 // ================== DB CONNECT ==================
 $servername = "localhost";
-$username   = "kuchenvi_kythuatkuchen";
-$password   = "sPY9vdvFrG8L68pJNf2d";
-$dbname     = "kuchenvi_kythuatkuchen";
+$username   = "root";
+$password   = "";
+$dbname     = "jiqsnnop_kythuatkuchen";
 $conn = new mysqli($servername, $username, $password, $dbname);
 if ($conn->connect_error) { die("Kết nối thất bại: " . $conn->connect_error); }
 $conn->set_charset('utf8mb4');
