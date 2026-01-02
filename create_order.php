@@ -932,7 +932,6 @@ if ($res = $conn->query($sqlHist)) {
       const selector = `#product_name_${orderNumber}_${rowIndex}`;
       const orderModeEl = document.getElementById(`order_mode_${orderNumber}`);
 
-      // Destroy nếu đã tồn tại
       if ($(selector).data('select2')) {
         $(selector).off('.select2');
         $(selector).select2('destroy');
@@ -943,39 +942,28 @@ if ($res = $conn->query($sqlHist)) {
         allowClear: true,
         width: '100%',
         closeOnSelect: true,
-
-        // 🔥 DÒNG QUYẾT ĐỊNH HIỆN SEARCH
         minimumResultsForSearch: 0,
 
         matcher: function(params, data) {
-          // Hiện toàn bộ khi chưa gõ
-          if ($.trim(params.term) === '') {
-            return data;
-          }
-
+          if ($.trim(params.term) === '') return data;
           if (!data.text) return null;
 
           const term = params.term.toLowerCase();
           if (!data.text.toLowerCase().includes(term)) return null;
 
-          // Ưu tiên view theo loại đơn
           const mode = orderModeEl?.value;
           const priorityView = ORDER_VIEW_PRIORITY[mode];
           const productView = Number(data.element?.dataset?.view || 0);
-
           data._isPriority = priorityView && productView === priorityView;
           return data;
         },
 
         templateResult: function(data) {
           if (!data.id) return data.text;
-
           const view = data.element?.dataset?.view;
-          const isPriority = data._isPriority;
-
           return $(`
         <div>
-          <span ${isPriority ? 'style="font-weight:600;color:#0d6efd"' : ''}>
+          <span ${data._isPriority ? 'style="font-weight:600;color:#0d6efd"' : ''}>
             ${data.text}
           </span>
           ${view ? `<small class="text-muted ms-2">(view ${view})</small>` : ''}
@@ -984,8 +972,15 @@ if ($res = $conn->query($sqlHist)) {
         }
       });
 
+      // ✅ FIX GIÁ KHÔNG HIỆN
+      $(selector).on('select2:select', function() {
+        const card = this.closest('.product-entry');
+        if (card) computeProductRow(card);
+      });
+
       dlog(DEBUG_SELECT2, '[Select2][Product][SEARCH OK]', selector);
     }
+
 
 
     function renderPerRowAddButtons(orderNumber) {
