@@ -610,7 +610,6 @@ if ($res = $conn->query($sqlHist)) {
       <option value="warehouse_ghtk">Khách lẻ Giao hàng tiết kiệm</option>
       <option value="warehouse_branch">Khách lẻ qua kho</option>
       <option value="shopee">Đơn hàng Shopee</option>
-      <option value="tiktok">Đơn hàng Tiktok</option>
       <option value="hurom">Đơn hàng HUROM</option>
       <option value="omada">Đơn hàng OMADA</option>
       <option value="bohemia">Đơn hàng BOHEMIA</option>
@@ -800,9 +799,7 @@ if ($res = $conn->query($sqlHist)) {
         <div class="row g-3 align-items-end">
           <div class="col-md-6">
             <label class="form-label">Tên sản phẩm <span class="required-star">*</span></label>
-            <select
-  class="form-select product-select"
-  id="product_name_${orderNumber}_${nextIndex}">
+            <select class="form-select product-select">
   <option value="">Chọn sản phẩm</option>
   ${productOptionsHtml(mode)}
 </select>
@@ -930,58 +927,25 @@ if ($res = $conn->query($sqlHist)) {
 
     function initSelect2DropdownsForRow(orderNumber, rowIndex) {
       const selector = `#product_name_${orderNumber}_${rowIndex}`;
-      const orderModeEl = document.getElementById(`order_mode_${orderNumber}`);
-
-      if ($(selector).data('select2')) {
-        $(selector).off('.select2');
-        $(selector).select2('destroy');
-      }
-
       $(selector).select2({
-        placeholder: "Gõ để tìm sản phẩm",
-        allowClear: true,
-        width: '100%',
-        closeOnSelect: true,
-        minimumResultsForSearch: 0,
-
-        matcher: function(params, data) {
-          if ($.trim(params.term) === '') return data;
-          if (!data.text) return null;
-
-          const term = params.term.toLowerCase();
-          if (!data.text.toLowerCase().includes(term)) return null;
-
-          const mode = orderModeEl?.value;
-          const priorityView = ORDER_VIEW_PRIORITY[mode];
-          const productView = Number(data.element?.dataset?.view || 0);
-          data._isPriority = priorityView && productView === priorityView;
-          return data;
-        },
-
-        templateResult: function(data) {
-          if (!data.id) return data.text;
-          const view = data.element?.dataset?.view;
-          return $(`
-        <div>
-          <span ${data._isPriority ? 'style="font-weight:600;color:#0d6efd"' : ''}>
-            ${data.text}
-          </span>
-          ${view ? `<small class="text-muted ms-2">(view ${view})</small>` : ''}
-        </div>
-      `);
-        }
-      });
-
-      // ✅ FIX GIÁ KHÔNG HIỆN
-      $(selector).on('select2:select', function() {
-        const card = this.closest('.product-entry');
-        if (card) computeProductRow(card);
-      });
-
-      dlog(DEBUG_SELECT2, '[Select2][Product][SEARCH OK]', selector);
+          placeholder: "Chọn hoặc tìm kiếm sản phẩm",
+          allowClear: true,
+          width: '100%',
+          closeOnSelect: true,
+          minimumInputLength: 0
+        })
+        .on('select2:open', () => {
+          setTimeout(() => {
+            const el = document.querySelector('.select2-search__field');
+            if (el) el.focus();
+          }, 0);
+        })
+        .on('select2:select', function() {
+          const card = this.closest('.product-entry');
+          if (card) computeProductRow(card);
+        });
+      dlog(DEBUG_SELECT2, '[Select2][Product] init for', selector);
     }
-
-
 
     function renderPerRowAddButtons(orderNumber) {
       const list = document.getElementById(`product_list_${orderNumber}`);
@@ -1932,22 +1896,28 @@ if ($res = $conn->query($sqlHist)) {
     function refreshProductSelect(selectEl, orderType) {
       if (!selectEl) return;
 
-      const order = Number(selectEl.closest('.product-entry')?.dataset?.order);
-      const row = Number(selectEl.closest('.product-entry')?.dataset?.index);
-      const id = `#product_name_${order}_${row}`;
+      const $el = $(selectEl);
 
-      if ($(id).data('select2')) {
-        $(id).off('.select2');
-        $(id).select2('destroy');
+      // 1️⃣ Destroy select2 nếu đã init
+      if ($el.data('select2')) {
+        $el.off('.select2');
+        $el.select2('destroy');
       }
 
+      // 2️⃣ Rebuild options theo orderType
       selectEl.innerHTML =
         `<option value="">Chọn sản phẩm</option>` +
         productOptionsHtml(orderType);
 
-      initSelect2DropdownsForRow(order, row);
+      // 3️⃣ Re-init select2
+      $el.select2({
+        placeholder: "Chọn hoặc tìm kiếm sản phẩm",
+        allowClear: true,
+        width: '100%',
+        closeOnSelect: true,
+        minimumInputLength: 0
+      });
     }
-
 
     async function handleOrderModeChange(order) {
       const modeSel = document.getElementById(`order_mode_${order}`);
