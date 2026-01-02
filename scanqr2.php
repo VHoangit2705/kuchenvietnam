@@ -35,84 +35,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['order_code'])) {
     /* =========================
        2. Xác định chi nhánh để chọn đúng cờ nhập tay & khóa tem
     ==========================*/
-    // === CHỌN CỘT THEO CHI NHÁNH (TRONG BẢNG products) ===
-$position  = $_SESSION['position'] ?? '';
-$nhapField = 'p.nhap_tay';     // mặc định
-$khoaField = 'p.khoa_tem';     // mặc định
+    $position = $_SESSION['position'] ?? '';
+    $nhapField = 'p.nhap_tay';    // mặc định cho admin
+    $khoaField = 'p.khoa_tem';
 
-if (stripos($position, 'vinh') !== false) {
-    $nhapField = 'p.nhap_tay_vinh';
-    $khoaField = 'p.khoa_tem_vinh';
-} elseif (stripos($position, 'hanoi') !== false || stripos($position, 'ha noi') !== false) {
-    $nhapField = 'p.nhap_tay_hanoi';
-    $khoaField = 'p.khoa_tem_hanoi';
-} elseif (stripos($position, 'hcm') !== false || stripos($position, 'ho chi minh') !== false) {
-    $nhapField = 'p.nhap_tay_hcm';
-    $khoaField = 'p.khoa_tem_hcm';
-}
-
+    if (stripos($position, 'vinh') !== false) {
+        $nhapField = 'p.nhap_tay_vinh';
+        $khoaField = 'p.khoa_tem_vinh';
+    } elseif (stripos($position, 'hanoi') !== false || stripos($position, 'ha noi') !== false) {
+        $nhapField = 'p.nhap_tay_hanoi';
+        $khoaField = 'p.khoa_tem_hanoi';
+    } elseif (stripos($position, 'hcm') !== false || stripos($position, 'ho chi minh') !== false) {
+        $nhapField = 'p.nhap_tay_hcm';
+        $khoaField = 'p.khoa_tem_hcm';
+    }
     // Admin => giữ nguyên p.nhap_tay, p.khoa_tem
 
     // 3. Lấy danh sách order_products (JOIN theo product_id)
     $sql = "
-  SELECT 
-    op.id AS order_product_id,
-    op.product_id,
-    COALESCE(p.product_name, op.product_name) AS display_name,
-    op.quantity,
-    op.is_promotion,
-
-    -- CHUẨN HÓA MODE NHẬP TAY: 0=quét QR, 1=nhập tay 3-4 số cuối, 2=quét 3 số cuối ghép snnew
-    CASE
-      WHEN {$nhapField} IN (0,1,2) THEN {$nhapField}
-      WHEN {$nhapField} IS NULL OR {$nhapField} = '' 
-        THEN CASE WHEN p.snnew IS NOT NULL AND p.snnew <> '' THEN 2 ELSE 0 END
-      ELSE 0
-    END AS nhap_mode,
-
-    p.snnew,
-    COUNT(pw.id) AS scanned_count
-  FROM order_products op
-  LEFT JOIN products p 
-    ON p.id = op.product_id
-  LEFT JOIN product_warranties pw 
-    ON pw.order_product_id = op.id
-  WHERE op.order_id = ?
-    AND op.warranty_scan = 1
-    AND ({$khoaField} = 0 OR {$khoaField} IS NULL)
-    AND (p.print = 0 OR p.print IS NULL)
-  GROUP BY
-    op.id, op.product_id, display_name, op.quantity, op.is_promotion, nhap_mode, p.snnew
-  ORDER BY op.is_promotion ASC, op.id ASC
-";
-
+      SELECT 
+        op.id AS order_product_id,
+        op.product_id,
+        COALESCE(p.product_name, op.product_name) AS display_name,
+        op.quantity,
+        op.is_promotion,
+        {$nhapField} AS nhap_tay,
+        p.snnew,
+        COUNT(pw.id) AS scanned_count
+      FROM order_products op
+      LEFT JOIN product_warranties pw 
+        ON pw.order_product_id = op.id
+      LEFT JOIN products p 
+        ON p.id = op.product_id
+      WHERE op.order_id = ?
+        AND op.warranty_scan = 1
+        AND ({$khoaField} = 0 OR {$khoaField} IS NULL)
+        AND (p.print = 0 OR p.print IS NULL)
+      GROUP BY
+        op.id, op.product_id, display_name,
+        op.quantity, op.is_promotion, nhap_tay, p.snnew
+      ORDER BY op.is_promotion ASC, op.id ASC
+    ";
 
     $stmt = $conn->prepare($sql);
-if (!$stmt) { die("Prepare failed: " . $conn->error); }
-$stmt->bind_param('i', $orderId);
-$stmt->execute();
-$result = $stmt->get_result();
-
-$orderProducts = [];
-while ($row = $result->fetch_assoc()) {
-    $remaining = (int)$row['quantity'] - (int)$row['scanned_count'];
-    if ($remaining > 0) {
-        $row['remaining'] = $remaining;
-
-        // đảm bảo luôn có int 0/1/2
-        $row['nhap_mode'] = (int)$row['nhap_mode'];
-        if (!in_array($row['nhap_mode'], [0,1,2], true)) {
-            $row['nhap_mode'] = 0;
-        }
-
-        $orderProducts[] = $row;
+    if (!$stmt) {
+        die("Prepare failed: " . $conn->error);
     }
-}
+    $stmt->bind_param('i', $orderId);
+    $stmt->execute();
+    $result = $stmt->get_result();
 
-if (empty($orderProducts)) {
-    die('Đơn hàng không tồn tại hoặc không có sản phẩm nào cần quét QR.');
-}
+    $orderProducts = [];
+    while ($row = $result->fetch_assoc()) {
+        $remaining = (int)$row['quantity'] - (int)$row['scanned_count'];
+        if ($remaining > 0) {
+            $row['remaining'] = $remaining;
+            if ($row['nhap_tay'] === null) $row['nhap_tay'] = 1;
+            $orderProducts[] = $row;
+        }
+    }
 
+    if (empty($orderProducts)) {
+        die('Đơn hàng không tồn tại hoặc không có sản phẩm nào cần quét QR.');
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -170,68 +155,46 @@ if (empty($orderProducts)) {
   <!-- Danh sách sản phẩm (50%) -->
   <div class="product-area">
     <!-- CHÚ Ý: action trỏ đúng file xử lý bạn dùng (process_scan_test.php như bạn ghi) -->
-    <form id="scanForm" method="POST" action="process_scan.php">
+    <form id="scanForm" method="POST" action="process_scan_test.php">
       <input type="hidden" name="order_code" value="<?= htmlspecialchars($orderCode) ?>">
       <div class="product-list">
         <?php foreach ($orderProducts as $prod): ?>
-  <?php 
-    $mode = (int)$prod['nhap_mode'];   // 0/1/2
-    $snnew = (string)($prod['snnew'] ?? '');
-    $isManual = ($mode === 1);
-    $placeholder = $isManual ? 'Nhập 3–4 ký tự cuối...' : 'Quét SN bằng camera...';
-  ?>
-  <div
-    class="product-item card shadow-sm mb-3"
-    data-order-product-id="<?= (int)$prod['order_product_id'] ?>"
-    data-product-id="<?= (int)$prod['product_id'] ?>"
-    data-product-name="<?= htmlspecialchars($prod['display_name']) ?>"
-    data-nhap-tay="<?= $mode ?>"
-    <?= $snnew !== '' ? 'data-sn-new="'.htmlspecialchars($snnew).'"' : '' ?>
-    title="Mode: <?= $mode ?><?= $snnew ? ' | SNNEW: '.htmlspecialchars($snnew) : '' ?>"
-  >
-    <div class="card-body">
-      <h4 class="card-title text-secondary mb-1 d-flex align-items-center">
-        <span><?= htmlspecialchars($prod['display_name']) ?></span>
-        <span class="remain-pill" data-remain-pill>Còn: <b><?= (int)$prod['remaining'] ?></b></span>
-        <?php if (!empty($prod['is_promotion'])): ?>
-          <small class="text-warning ml-2">(KM)</small>
-        <?php endif; ?>
-      </h4>
-
-      <p class="card-text mb-2">
-        Yêu cầu: 
-        <?php if ($mode === 0): ?>
-          <span class="text-primary">Quét QR/Mã vạch</span>
-        <?php elseif ($mode === 1): ?>
-          <span class="text-danger">Nhập tay 3–4 ký tự cuối</span>
-        <?php else: ?>
-          <span class="text-info">Quét QR/Mã vạch (ghép SNNEW)</span>
-        <?php endif; ?>
-      </p>
-
-      <p class="card-text mb-2">Số lượng cần quét: <strong data-need><?= (int)$prod['remaining'] ?></strong></p>
-
-      <div class="mt-2">
-        <?php for ($i = 0; $i < (int)$prod['remaining']; $i++): ?>
-          <input type="text"
-                 name="sn[<?= (int)$prod['order_product_id'] ?>][]"
-                 class="form-control mb-2 serial-input"
-                 placeholder="<?= htmlspecialchars($placeholder) ?>"
-                 <?= $isManual ? '' : 'readonly' ?>
-                 <?= $isManual ? 'maxlength="4"' : '' ?>
-                 required>
-        <?php endfor; ?>
-
-        <?php if ($mode === 1): ?>
-          <p class="text-danger small mb-0">⚠️ Nhập tay 3–4 ký tự cuối (SP in sai QR không được quét).</p>
-        <?php elseif ($mode === 2): ?>
-          <p class="text-info small mb-0">ℹ️ Quét 3 ký tự cuối, hệ thống sẽ ghép với <code>SNNEW</code> của sản phẩm.</p>
-        <?php endif; ?>
-      </div>
-    </div>
-  </div>
-<?php endforeach; ?>
-
+          <div
+            class="product-item card shadow-sm mb-3"
+            data-order-product-id="<?= (int)$prod['order_product_id'] ?>"
+            data-product-id="<?= (int)$prod['product_id'] ?>"
+            data-product-name="<?= htmlspecialchars($prod['display_name']) ?>"
+            data-nhap-tay="<?= (int)$prod['nhap_tay'] ?>"
+            <?php if (in_array((int)$prod['nhap_tay'], [1, 2])): ?>
+              data-sn-new="<?= htmlspecialchars((string)$prod['snnew']) ?>"
+            <?php endif; ?>
+          >
+            <div class="card-body">
+              <h4 class="card-title text-secondary mb-1 d-flex align-items-center">
+                <span><?= htmlspecialchars($prod['display_name']) ?></span>
+                <span class="remain-pill" data-remain-pill>Còn: <b><?= (int)$prod['remaining'] ?></b></span>
+                <?php if (!empty($prod['is_promotion'])): ?>
+                  <small class="text-warning ml-2">(SP khuyến mại)</small>
+                <?php endif; ?>
+              </h4>
+              <p class="card-text mb-2">Số lượng cần quét: <strong data-need><?= (int)$prod['remaining'] ?></strong></p>
+              <div class="mt-2">
+                <?php for ($i = 0; $i < (int)$prod['remaining']; $i++): ?>
+                  <input type="text"
+                         name="sn[<?= (int)$prod['order_product_id'] ?>][]"
+                         class="form-control mb-2 serial-input"
+                         placeholder="Quét mã SN..."
+                         <?= (int)$prod['nhap_tay'] == 1 ? '' : 'readonly' ?>
+                         maxlength="4"
+                         required>
+                <?php endfor; ?>
+                <?php if ((int)$prod['nhap_tay'] == 1): ?>
+                  <p class="text-danger small mb-0">⚠️ Nhập tay 3 ký tự cuối hoặc 4 kí tự cuối, sản phẩm in sai QR không được quét.</p>
+                <?php endif; ?>
+              </div>
+            </div>
+          </div>
+        <?php endforeach; ?>
       </div>
       <div class="text-center">
         <button id="submitBtn" type="submit" class="btn btn-success btn-lg px-5 mt-3">Hoàn tất</button>
@@ -246,7 +209,7 @@ if (empty($orderProducts)) {
   <div class="modal-dialog modal-dialog-centered" role="document">
     <div class="modal-content border-danger">
       <div class="modal-header bg-danger text-white">
-        <h5 class="modal-title" id="errorModalLabel">CẢNH BÁO</h5>
+        <h5 class="modal-title" id="errorModalLabel">Không thể hoàn tất</h5>
         <button type="button" class="close text-white" data-dismiss="modal" aria-label="Đóng"><span aria-hidden="true">&times;</span></button>
       </div>
       <div class="modal-body">
@@ -254,8 +217,8 @@ if (empty($orderProducts)) {
         <div class="error-details p-2 bg-light rounded"><pre id="errorMessage">Đã xảy ra lỗi không xác định.</pre></div>
       </div>
       <div class="modal-footer">
-        <a href="xem_donhang.php" class="btn btn-outline-secondary">Thoát quét đơn hàng</a>
-        <button type="button" class="btn btn-danger" data-dismiss="modal">Thử lại</button>
+        <a href="xem_donhang.php" class="btn btn-outline-secondary">Về danh sách</a>
+        <button type="button" class="btn btn-danger" data-dismiss="modal">Đã hiểu</button>
       </div>
     </div>
   </div>
@@ -274,19 +237,11 @@ if (empty($orderProducts)) {
         <div id="successSummary" class="small text-muted"></div>
       </div>
       <div class="modal-footer">
-        <a href="xem_donhang.php" class="btn btn-success">Tiếp tục</a>
+        <a href="xem_donhang.php" class="btn btn-success">Về danh sách</a>
       </div>
     </div>
   </div>
 </div>
-
-<!-- Scan success overlay + toast stack (đang dùng cho mỗi lần quét) -->
-<div id="scanOk" class="scan-ok-overlay" aria-live="polite" aria-atomic="true">
-  <div class="big-check">✓</div>
-  <div id="scanOkText">Đã ghi nhận</div>
-  <div class="small" id="scanOkSub"></div>
-</div>
-<div id="toastStack" aria-live="polite" aria-atomic="true"></div>
 
 <audio id="scanSound" src="beep.mp3"></audio>
 <audio id="scanSoundError" src="beepstop.mp3"></audio>
@@ -298,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const scannedSet     = new Set();
   const orderCode      = '<?= addslashes($orderCode) ?>';
   let busy             = false;
-
+ 
   function vibrateOk(){ if(navigator.vibrate){ try{ navigator.vibrate([10,30,10]); }catch(e){} } }
   function pushToast({title='Đã quét', body='', sub=''}) {
     const el = document.createElement('div');
@@ -341,6 +296,18 @@ document.addEventListener('DOMContentLoaded', () => {
   function displayMessage(msg, type='success'){
     const el = document.getElementById('scan-message'); el.textContent = msg; el.className=''; el.classList.add(type,'visible'); setTimeout(()=> el.classList.remove('visible'), 2500);
   }
+  function findNextEmptyInput(card) {
+  return Array.from(card.querySelectorAll('input.serial-input'))
+    .find(i => i.value.trim() === '' && !i.dataset.filled);
+}
+
+ function showMessage(msg, type = 'success') {
+  const el = document.getElementById('scan-message');
+  el.textContent = msg;
+  el.className = '';
+  el.classList.add(type, 'visible');
+  setTimeout(() => el.classList.remove('visible'), 3000);
+}
 
   function unlockOrder(){ navigator.sendBeacon('unlock_order.php', JSON.stringify({ order_code: orderCode })); }
   window.addEventListener('beforeunload', unlockOrder);
@@ -365,65 +332,167 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function lookupSerial(sn){
-    const res = await fetch(`http://localhost/khokuchen/api/lookup_sn.php?sn=${encodeURIComponent(sn)}`);
+    const res = await fetch(`https://kuchenvietnam.vn/kuchen/khokuchen/api/lookup_sn.php?sn=${encodeURIComponent(sn)}`);
     if (!res.ok) return null; return res.json();
   }
+ async function processScanned(raw) {
+  if (busy) return;
+  busy = true;
 
-  async function processScanned(raw){
-    if (busy) return; busy = true;
-    const rawSer = extractSerial(raw);
-    if (!rawSer){ displayMessage('❌ Dữ liệu không hợp lệ','error'); try{scanSoundError.play();}catch(e){} busy=false; return; }
-    if (scannedSet.has(rawSer)){ displayMessage(`⚠️ SN "${rawSer}" đã quét trước đó.`,'error'); try{scanSoundError.play();}catch(e){} busy=false; return; }
-
-    let fullSn=null, productId=null, productName=null, matchedMode=null;
-
-    const res0 = await lookupSerial(rawSer);
-    if (res0 && res0.product_id){
-      const pid = String(res0.product_id).trim();
-      const items = Array.from(document.querySelectorAll('.product-item[data-nhap-tay="0"]'));
-      for (let item of items){
-        if ((item.dataset.productId||'').trim() === pid){
-          fullSn=rawSer; productId=pid; productName=(res0.product_name||item.dataset.productName||'').trim(); matchedMode=0; break;
-        }
-      }
-    }
-
-    if (!fullSn && rawSer.length>=3){
-      const last3 = rawSer.slice(-3);
-      const items = Array.from(document.querySelectorAll('.product-item[data-nhap-tay="2"]'));
-      for (let item of items){
-        const prefix = item.dataset.snNew || '';
-        const candidate = prefix + last3;
-        if (scannedSet.has(candidate)) continue;
-        const res2 = await lookupSerial(candidate);
-        if (res2 && res2.product_id){
-          const pid2 = String(res2.product_id).trim();
-          if ((item.dataset.productId||'').trim() === pid2){
-            fullSn=candidate; productId=pid2; productName=(res2.product_name||item.dataset.productName||'').trim(); matchedMode=2; break;
-          }
-        }
-      }
-    }
-
-    if (!fullSn){
-      const hasManual = document.querySelector('.product-item[data-nhap-tay="1"]');
-      if (hasManual){ displayMessage('⚠️ Dòng này đang ở chế độ nhập tay. Vui lòng nhập 3 ký tự cuối.','error'); }
-      else { displayMessage(`❌ Không tìm thấy sản phẩm cho SN "${rawSer}".`,'error'); }
-      try{scanSoundError.play();}catch(e){} busy=false; return;
-    }
-
-    const targets = Array.from(document.querySelectorAll(`.product-item[data-product-id="${productId}"][data-nhap-tay="${matchedMode}"]`));
-    for (let item of targets){
-      const empty = Array.from(item.querySelectorAll('input.serial-input')).find(i=>i.value.trim()==='');
-      if (empty){
-        empty.value = fullSn; scannedSet.add(fullSn);
-        const remain = updateRemainingUI(item); highlightCard(item); showScanOK(fullSn, (productName||item.dataset.productName||'Sản phẩm'), remain);
-        item.scrollIntoView({behavior:'smooth', block:'center'}); busy=false; return;
-      }
-    }
-
-    displayMessage(`❌ Đã quét đủ SN cho "${productName || 'Sản phẩm'}".`,'error'); try{scanSoundError.play();}catch(e){} busy=false;
+  const rawSer = extractSerial(raw);
+  if (!rawSer) {
+    showMessage('❌ Dữ liệu QR không hợp lệ', 'error');
+    scanSoundError.play();
+    busy = false;
+    return;
   }
+
+  let fullSn = null;
+  let productId = null;
+  let productName = null;
+  let matchedMode = null;
+
+  const hasMode0 = document.querySelector('.product-item[data-nhap-tay="0"]');
+  const hasMode1 = document.querySelector('.product-item[data-nhap-tay="1"]');
+  const hasMode2 = document.querySelector('.product-item[data-nhap-tay="2"]');
+
+  const HARD_PREFIXES = ['20250922', '20250403'];
+  const isNumeric = /^\d+$/.test(rawSer);
+  const hasPrefix = isNumeric && HARD_PREFIXES.some(prefix => rawSer.startsWith(prefix));
+
+  /* =====================================================
+     BƯỚC 1 + 2 – MODE 2 (ƯU TIÊN TUYỆT ĐỐI)
+  ===================================================== */
+  if (hasPrefix && hasMode2) {
+  const last5 = rawSer.slice(-5);
+  const items2 = document.querySelectorAll('.product-item[data-nhap-tay="2"]');
+
+  for (let card of items2) {
+    let snNew = (card.dataset.snNew || '').replace(/0$/, '');
+    const candidateSn = snNew + last5;
+
+    if (scannedSet.has(candidateSn)) continue;
+
+    const res = await lookupSerial(candidateSn);
+    if (!res || !res.product_id) continue;
+
+    const emptyInput = Array.from(card.querySelectorAll('input.serial-input'))
+      .find(i => i.value.trim() === '');
+    if (!emptyInput) continue;
+
+    fullSn = candidateSn;
+    productId = card.dataset.productId;
+    productName = res.product_name || card.dataset.productName;
+    matchedMode = 2;
+    break;
+  }
+}
+
+  /* =====================================================
+     BƯỚC 3 – MODE 0 (CHỈ KHI MODE 2 FAIL)
+  ===================================================== */
+  if (!fullSn && hasMode0) {
+    const res0 = await lookupSerial(rawSer);
+    if (res0 && res0.product_id) {
+      const items0 = document.querySelectorAll('.product-item[data-nhap-tay="0"]');
+      for (let card of items0) {
+        if (String(card.dataset.productId) === String(res0.product_id)) {
+          fullSn = rawSer;
+          productId = card.dataset.productId;
+          productName = res0.product_name || card.dataset.productName;
+          matchedMode = 0;
+          break;
+        }
+      }
+    }
+  }
+
+  /* =====================================================
+     BƯỚC 4 – MODE 1 (NHẬP TAY)
+  ===================================================== */
+  if (!fullSn && hasMode1) {
+    showMessage('⚠️ Sản phẩm này nhập tay SN, vui lòng nhập 3–4 ký tự cuối', 'error');
+    scanSoundError.play();
+    busy = false;
+    return;
+  }
+
+  /* =====================================================
+     BƯỚC 5 – KHÔNG MATCH
+  ===================================================== */
+  if (!fullSn) {
+    showMessage(`❌ Không tìm thấy SN phù hợp: ${rawSer}`, 'error');
+    scanSoundError.play();
+    busy = false;
+    return;
+  }
+
+  /* =====================================================
+     GHI SN
+  ===================================================== */
+ /* =====================================================
+   GHI SN – CHỈ ĐIỀN 1 INPUT DUY NHẤT
+===================================================== */
+const cards = Array.from(document.querySelectorAll(
+  `.product-item[data-product-id="${productId}"][data-nhap-tay="${matchedMode}"]`
+));
+
+const card = cards.find(c =>
+  Array.from(c.querySelectorAll('input.serial-input'))
+    .some(i => i.value.trim() === '')
+);
+
+
+if (!card) {
+  showMessage(`❌ Không tìm thấy sản phẩm phù hợp`, 'error');
+  scanSoundError.play();
+  busy = false;
+  return;
+}
+
+// ❌ SN đã quét rồi
+if (scannedSet.has(fullSn)) {
+  showMessage(`⚠️ SN ${fullSn} đã được quét`, 'error');
+  scanSoundError.play();
+  busy = false;
+  return;
+}
+
+const input = findNextEmptyInput(card);
+
+if (!input) {
+  showMessage(`❌ Đã đủ số lượng SN cho ${productName}`, 'error');
+  scanSoundError.play();
+  busy = false;
+  return;
+}
+
+// ✅ Ghi đúng 1 ô
+input.value = fullSn;
+input.dataset.filled = '1';
+
+// ✅ CHỈ KHÓA INPUT NẾU KHÔNG PHẢI NHẬP TAY
+if (matchedMode !== 1) {
+  input.readOnly = true;
+}
+
+
+scannedSet.add(fullSn);
+
+const remaining = updateRemainingUI(card);
+highlightCard(card);
+
+showMessage(
+  `✅ ${productName} • SN: ${fullSn} • Còn: ${remaining}`,
+  'success'
+);
+
+try { scanSound.play(); } catch(e) {}
+busy = false;
+
+
+  
+}
 
   const html5QrCode = new Html5Qrcode('qr-reader');
   const config = { fps:30, qrbox:{width:250,height:90}, formatsToSupport:['QR_CODE','CODE_128','CODE_39','EAN_13'] };

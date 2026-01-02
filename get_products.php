@@ -22,7 +22,8 @@ $sql = "
   SELECT 
     p.product_name,
     p.price,
-    p.price_retail, 
+    p.price_retail,
+    p.`view`, 
     1 AS is_promo,
     COALESCE(s.sold_qty, 0) AS sort_sold,
     CASE 
@@ -56,7 +57,8 @@ UNION ALL
   SELECT
     p.product_name,
     p.price,
-    p.price_retail, 
+    p.price_retail,
+    p.`view`, 
     0 AS is_promo,
     COALESCE(s.sold_qty, 0) AS sort_sold,
     CASE 
@@ -92,27 +94,28 @@ ORDER BY group_rank ASC, sort_sold DESC, sort_view ASC, sort_name ASC
 ";
 
 try {
-    $stmt = $conn->prepare($sql);
-    // 2 tham số ? tương ứng 2 subquery sold_qty (nhóm 1 và nhóm 2)
-    $stmt->bind_param('ss', $sinceDate, $sinceDate);
-    $stmt->execute();
-    $res = $stmt->get_result();
+  $stmt = $conn->prepare($sql);
+  // 2 tham số ? tương ứng 2 subquery sold_qty (nhóm 1 và nhóm 2)
+  $stmt->bind_param('ss', $sinceDate, $sinceDate);
+  $stmt->execute();
+  $res = $stmt->get_result();
 
-    $products = [];
-   while ($row = $res->fetch_assoc()) {
+  $products = [];
+  while ($row = $res->fetch_assoc()) {
     $products[] = [
-        'product_name'  => $row['product_name'],
-        'price'         => (float)$row['price'],
-        'price_retail'  => isset($row['price_retail']) ? (float)$row['price_retail'] : 0.0, // THÊM
+      'product_name'  => $row['product_name'],
+      'price'         => (float)$row['price'],
+      'price_retail'  => isset($row['price_retail']) ? (float)$row['price_retail'] : 0.0,
+      'view'          => isset($row['view']) ? (int)$row['view'] : null
     ];
-}
+  }
 
-    echo json_encode($products, JSON_UNESCAPED_UNICODE);
+  echo json_encode($products, JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
-    http_response_code(500);
-    error_log('[products_suggest] '.$e->getMessage());
-    echo json_encode([]); // trả mảng rỗng để frontend không vỡ .map()
+  http_response_code(500);
+  error_log('[products_suggest] ' . $e->getMessage());
+  echo json_encode([]); // trả mảng rỗng để frontend không vỡ .map()
 } finally {
-    if (isset($stmt)) $stmt->close();
-    $conn->close();
+  if (isset($stmt)) $stmt->close();
+  $conn->close();
 }

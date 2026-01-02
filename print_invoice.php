@@ -75,20 +75,126 @@ $zones = [
 $orderZone = $order['zone'] ?? 'Đơn hàng Vinh';
 $companyInfo = $zones[$orderZone] ?? $zones['Đơn hàng Vinh'];
 
-// =================== ⚙️ GHI ĐÈ THÔNG TIN NẾU VIEW = 3 ===================
-if ($hasView3) {
-    // Thay tên công ty
-    $companyInfo['name'] = 'CÔNG TY TNHH ĐỒNG TÂM HR';
-    // Nếu là Hà Nội → đổi hotline và website
-    if ($orderZone === 'Đơn hàng HaNoi') {
-        $companyInfo['hotline'] = '19009056';
-        $companyInfo['website'] = 'hurom-vietnam.vn';
-    }
-    // Logo thay đổi
-    $companyLogo = 'https://kuchenvietnam.vn/kuchen/khokuchen/hoadon/hurom.webp';
-} else {
-    $companyLogo = 'https://kuchenvietnam.vn/kuchen/khokuchen/hoadon/logokuchen.png';
+// =================== ⚙️ GHI ĐÈ THÔNG TIN THEO VIEW ===================
+$companyLogo = 'https://kuchenvietnam.vn/kuchen/khokuchen/hoadon/logokuchen.png';
+
+// ===== Map địa chỉ theo zone =====
+$zoneAddressMap = [
+    'Đơn hàng HaNoi' => 'Số 136, đường Cổ Linh, Q. Long Biên, Hà Nội',
+    'Đơn hàng Vinh'  => 'Tòa nhà Kuchen Building, xóm 13, P.Vinh Phú, tỉnh Nghệ An',
+    'Đơn hàng HCM'   => 'Lô A1_11 đường D5, KDC Phú Nhuận, phường Phước Long B, TP Thủ Đức',
+];
+
+// Ghi đè địa chỉ theo zone (luôn luôn)
+if (isset($zoneAddressMap[$orderZone])) {
+    $companyInfo['address'] = $zoneAddressMap[$orderZone];
 }
+
+// =================== 📌 XÁC ĐỊNH VIEW TRONG ĐƠN (FIX VIEW 5 BỊ RỚT) ===================
+$viewsInOrder = [];
+
+if (!empty($products)) {
+
+    // 1️⃣ Ưu tiên product_id
+    $productIds = array_values(array_filter(
+        array_column($products, 'product_id'),
+        fn($id) => (int)$id > 0
+    ));
+
+    if (!empty($productIds)) {
+        $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+        $types = str_repeat('i', count($productIds));
+
+        $sql = "SELECT DISTINCT view FROM products WHERE id IN ($placeholders)";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param($types, ...$productIds);
+        $stmt->execute();
+
+        $viewsInOrder = array_column(
+            $stmt->get_result()->fetch_all(MYSQLI_ASSOC),
+            'view'
+        );
+    }
+
+    // 2️⃣ FALLBACK: nếu vẫn chưa xác định được view → dò theo product_name
+    if (empty($viewsInOrder)) {
+        $names = array_unique(array_column($products, 'product_name'));
+
+        $likes = [];
+        $params = [];
+        foreach ($names as $n) {
+            $likes[]  = "product_name LIKE ?";
+            $params[] = "%" . $n . "%";
+        }
+
+        if (!empty($likes)) {
+            $sql = "SELECT DISTINCT view 
+                    FROM products 
+                    WHERE (" . implode(' OR ', $likes) . ")
+                      AND view IN (3,5,6)";
+
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param(str_repeat('s', count($params)), ...$params);
+            $stmt->execute();
+
+            $viewsInOrder = array_column(
+                $stmt->get_result()->fetch_all(MYSQLI_ASSOC),
+                'view'
+            );
+        }
+    }
+}
+
+
+/**
+ * Ưu tiên VIEW:
+ * 3 (HUROM/Đồng Tâm HR)
+ * > 6 (OMADA)
+ * > 5 (BOHEMIA)
+ */
+if (in_array(3, $viewsInOrder)) {
+
+    // ===== VIEW = 3 | HUROM VIỆT NAM =====
+    if ($orderZone === 'Đơn hàng Vinh') {
+        $companyInfo['name'] = 'CÔNG TY TNHH ĐỒNG TÂM HR - Chi nhánh Vinh';
+    } elseif ($orderZone === 'Đơn hàng HCM') {
+        $companyInfo['name'] = 'CÔNG TY TNHH ĐỒNG TÂM HR - Chi nhánh Hồ Chí Minh';
+    } else {
+        $companyInfo['name'] = 'CÔNG TY TNHH ĐỒNG TÂM HR - HUROM VIỆT NAM';
+    }
+    $companyInfo['website'] = 'hurom-vietnam.vn';
+    $companyInfo['hotline'] = '19009056';
+    // Giữ nguyên hotline + website
+    $companyLogo = 'https://kuchenvietnam.vn/kuchen/khokuchen/hoadon/hurom.webp';
+} elseif (in_array(6, $viewsInOrder)) {
+
+    // ===== VIEW = 6 | OMADA =====
+    if ($orderZone === 'Đơn hàng Vinh') {
+        $companyInfo['name'] = 'CÔNG TY TNHH ĐỒNG TÂM HR - OMADA VIỆT NAM chi nhánh Vinh';
+    } elseif ($orderZone === 'Đơn hàng HCM') {
+        $companyInfo['name'] = 'CÔNG TY TNHH ĐỒNG TÂM HR - OMADA VIỆT NAM chi nhánh Hồ Chí Minh';
+    } else {
+        $companyInfo['name'] = 'CÔNG TY TNHH ĐỒNG TÂM HR - OMADA VIỆT NAM';
+    }
+
+    $companyInfo['website'] = 'omada.vn';
+    $companyInfo['hotline'] = '19009056';
+    $companyLogo            = 'https://kuchenvietnam.vn/kuchen/khokuchen/hoadon/omada.jpg';
+} elseif (in_array(5, $viewsInOrder)) {
+
+    // ===== VIEW = 5 | BOHEMIA =====
+    if ($orderZone === 'Đơn hàng Vinh') {
+        $companyInfo['name'] = 'CÔNG TY TNHH TMXD ĐỒNG TÂM - Chi nhánh Vinh';
+    } elseif ($orderZone === 'Đơn hàng HCM') {
+        $companyInfo['name'] = 'CÔNG TY TNHH TMXD ĐỒNG TÂM - Chi nhánh Hồ Chí Minh';
+    } else {
+        $companyInfo['name'] = 'CÔNG TY TNHH TMXD ĐỒNG TÂM - BOHEMIA VIỆT NAM';
+    }
+    $companyInfo['website'] = 'bohemiaroyalcrystal.vn';
+    $companyInfo['hotline'] = '19009056';
+    $companyLogo            = 'https://kuchenvietnam.vn/kuchen/khokuchen/hoadon/bohemia.png';
+}
+
 
 // Cho phép override qua URL
 $customerName    = $_GET['customer_name'] ?? $order['customer_name'];
@@ -101,9 +207,11 @@ $depositAmount   = $_GET['deposit_amount'] ?? 0;
 $depositType     = $_GET['deposit_type'] ?? '';
 // ====== QR THANH TOÁN ======
 $qrPayLink = '';
-if ($paymentMethod === 'bank' 
- || ($paymentMethod === 'mixed' && $bankAmount > 0) 
- || ($paymentMethod === 'deposit' && $depositType === 'bank' && $depositAmount > 0)) {
+if (
+    $paymentMethod === 'bank'
+    || ($paymentMethod === 'mixed' && $bankAmount > 0)
+    || ($paymentMethod === 'deposit' && $depositType === 'bank' && $depositAmount > 0)
+) {
 
     $amount = $bankAmount ?: $depositAmount ?: 0;
     if ($paymentMethod === 'bank') {
@@ -112,7 +220,7 @@ if ($paymentMethod === 'bank'
         $des = "TT phan con lai DH " . $order['order_code2'];
     } elseif ($paymentMethod === 'deposit') {
         $des = "Dat coc DH " . $order['order_code2'];
-    }elseif ($paymentMethod === 'bank_droppii') {
+    } elseif ($paymentMethod === 'bank_droppii') {
         $des = "TTDH tren droppii " . $order['order_code2'];
     } else {
         $des = "TTDH " . $order['order_code2'];
@@ -120,17 +228,17 @@ if ($paymentMethod === 'bank'
 
     // Tạo link QR
     $qrPayLink = "https://qr.sepay.vn/img?acc=116615609999"
-               . "&bank=VietinBank"
-               . "&amount=" . urlencode($amount)
-               . "&des=" . urlencode($des);
+        . "&bank=VietinBank"
+        . "&amount=" . urlencode($amount)
+        . "&des=" . urlencode($des);
 }
 
 // Debug QR trước
 $debugInfo = '';
 if ($qrPayLink) {
-    $debugInfo = '<p style="color:green">QR link: '.$qrPayLink.'</p>';
+    $debugInfo = '<p style="color:green">QR link: ' . $qrPayLink . '</p>';
 } else {
-    $debugInfo = '<p style="color:red">⚠️ Không tạo được QR (method='.$paymentMethod.', bank='.$bankAmount.', deposit='.$depositAmount.', type='.$depositType.')</p>';
+    $debugInfo = '<p style="color:red">⚠️ Không tạo được QR (method=' . $paymentMethod . ', bank=' . $bankAmount . ', deposit=' . $depositAmount . ', type=' . $depositType . ')</p>';
 }
 
 
@@ -167,7 +275,7 @@ $html = '
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hóa đơn: '. htmlspecialchars($order['order_code2']) .'</title>
+    <title>Hóa đơn: ' . htmlspecialchars($order['order_code2']) . '</title>
     <style>
     @page {
         margin: 20; /* Loại bỏ lề mặc định khi in */
@@ -244,7 +352,7 @@ $html = '
     <table class="no-border">
     <tr>
         <td class="logo">
-            <img src="'.$companyLogo.'" alt="Logo công ty" style="width: 100%;">
+            <img src="' . $companyLogo . '" alt="Logo công ty" style="width: 100%;">
         </td>
         <td class="content" colspan="2">
     <p><strong>' . htmlspecialchars($companyInfo['name']) . '</strong></p>
@@ -253,7 +361,7 @@ $html = '
 </td>
 
         <td class="qr-code">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?data='. htmlspecialchars($order['order_code2']) .'&amp;size=100x100" style="width: 100%;" alt="" title="" />
+        <img src="https://api.qrserver.com/v1/create-qr-code/?data=' . htmlspecialchars($order['order_code2']) . '&amp;size=100x100" style="width: 100%;" alt="" title="" />
     </td>
     </tr>
     <tr>
@@ -371,7 +479,7 @@ $html .= '
     </table>';
 
 
-    $html .='<table style="width: 100%; border: none; margin-top: 5px;">
+$html .= '<table style="width: 100%; border: none; margin-top: 5px;">
         <tr>
             <td style="width: 40%; text-align: center; vertical-align: top;">
                 <p><strong>Khách hàng ký nhận</strong><br>
@@ -380,7 +488,7 @@ $html .= '
 
             <td style="width:20%;text-align:center">';
 if ($qrPayLink) {
-    $html .= '<img src="'.$qrPayLink.'" style="width:95px;height:95px"><br>
+    $html .= '<img src="' . $qrPayLink . '" style="width:95px;height:95px"><br>
               <span style="font-size:11px">QR Thanh toán</span>';
 }
 $html .= '</td>
@@ -415,4 +523,3 @@ $dompdf->render();
 
 // Tải xuống file PDF
 $dompdf->stream("file_mau.pdf", ["Attachment" => false]);
-?>
