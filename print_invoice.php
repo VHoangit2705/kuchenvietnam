@@ -413,6 +413,7 @@ $html = '
 </thead>
 
 <tbody>';
+
 // Gán giá trị từ URL vào mảng sản phẩm
 if (isset($_GET['prices']) && isset($_GET['quantities']) && isset($_GET['total'])) {
     foreach ($products as &$product) {
@@ -430,6 +431,13 @@ if (isset($_GET['prices']) && isset($_GET['quantities']) && isset($_GET['total']
     unset($product); // Giải phóng tham chiếu
 }
 $totalAmount = 0;
+foreach ($products as &$product) {
+    $product['km'] = (!empty($product['is_promotion']) && (int)$product['is_promotion'] === 1)
+        ? ' (KM)'
+        : '';
+}
+unset($product);
+
 foreach ($products as $index => $product) {
     // Check if the product is hidden based on URL parameter
     $hideProduct = isset($hideProducts[$product['id']]) && $hideProducts[$product['id']] == 1;
@@ -458,7 +466,10 @@ foreach ($products as $index => $product) {
     $html .= '
     <tr>
         <td style="text-align: center; font-size: small;">' . ($index + 1) . '</td>
-        <td style="text-align: left; font-size: small;">' . htmlspecialchars($product['product_name']) . '</td>
+        <td style="text-align: left; font-size: small;">'
+        . htmlspecialchars($product['product_name'] . $product['km']) .
+        '</td>
+
         <td style="text-align: center; font-size: small;">' . $product['quantity'] . '</td>
         <td style="text-align: center; font-size: small;">' . number_format($price, 0, ',', '.') . '</td>
         <td style="text-align: center; font-size: small;">' . number_format($total, 0, ',', '.') . '</td>

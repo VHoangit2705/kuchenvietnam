@@ -39,23 +39,27 @@ $products = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
 // Lấy ngày hiện tại theo định dạng yêu cầu
 $currentDateFormatted = date('d/m/Y');
+//$currentDateFormatted = "01/12/2024";
 // Ghi lịch sử in phiếu
 $printedBy = $_SESSION['full_name'] ?? $_SERVER['REMOTE_ADDR']; // fallback nếu không có session
 $historyNote = "In phiếu BH lúc " . date("Y-m-d H:i:s");
-$loai_phieu= '2';
+$loai_phieu = '2';
 $historySql = "INSERT INTO print_history (order_id, printed_by, note, loai_phieu) VALUES (?, ?, ?, ?)";
 $historyStmt = $conn->prepare($historySql);
 if ($historyStmt) {
     $historyStmt->bind_param("issi", $orderId, $printedBy, $historyNote, $loai_phieu);
     $historyStmt->execute();
 }
+$kmZones = ["Đơn hàng HCM", "Đơn hàng Vinh"];
+
 foreach ($products as &$product) {
-    if ($zone === "Đơn hàng HCM" && $product['is_promotion'] == 1) {
-        $product['km'] = "(KM)"; // Nếu là sản phẩm khuyến mãi và zone HCM thì in "KM"
+    if (in_array($zone, $kmZones, true) && $product['is_promotion'] == 1) {
+        $product['km'] = "(KM)";
     } else {
-        $product['km'] = "";   // Ngược lại, để trống
+        $product['km'] = "";
     }
 }
+
 unset($product); // Giải phóng biến tham chiếu
 // Khởi tạo HTML động cho mỗi sản phẩm
 $html = '
@@ -119,12 +123,12 @@ $html = '
     height: 100px;
 }
 .qr-box img {
-    width: 80%;
+    width: 70%;
     height: auto;
 }
 .qr-text {
     position: absolute;
-    top: 450px;
+    top: 440px;
     left: 580px;
     width: 160px;
     font-size: 12px;
@@ -146,24 +150,23 @@ foreach ($products as $product) {
         <div class="text-d">' . htmlspecialchars($product['exp']) . '</div>';
 
         // Nếu sản phẩm có view = 3 hoặc view = 1 thì thêm QR code
-if ((int)$product['view'] === 3 || (int)$product['view'] === 1) {
-    if ((int)$product['view'] === 3) {
-        //'https://baohanh.hurom-vietnam.vn/dang-ki-bao-hanh-hurom/order_lookup.php?order_code2='. urlencode($order['order_code2']);
-        $linkQR = 'https://baohanh.hurom-vietnam.vn/dang-ki-bao-hanh-hurom/order_lookup.php?order_code2='. urlencode($order['order_code2']);
-    } elseif ((int)$product['view'] === 1) {
-        $linkQR = 'https://kuchenvietnam.vn/dang-ki-bao-hanh-kuchen/order_lookup.php?order_code2=' 
-                  . urlencode($order['order_code2']);
-    }
+        if ((int)$product['view'] === 3 || (int)$product['view'] === 1) {
+            if ((int)$product['view'] === 3) {
+                //'https://baohanh.hurom-vietnam.vn/dang-ki-bao-hanh-hurom/order_lookup.php?order_code2='. urlencode($order['order_code2']);
+                $linkQR = 'https://baohanh.hurom-vietnam.vn/dang-ki-bao-hanh-hurom/order_lookup.php?order_code2=' . urlencode($order['order_code2']);
+            } elseif ((int)$product['view'] === 1) {
+                $linkQR = 'https://kuchenvietnam.vn/dang-ki-bao-hanh-kuchen/order_lookup.php?order_code2='
+                    . urlencode($order['order_code2']);
+            }
 
-    $qrImage = 'https://api.qrserver.com/v1/create-qr-code/?data=' . urlencode($linkQR) . '&size=100x100';
-    
-    $html .= '
+            $qrImage = 'https://api.qrserver.com/v1/create-qr-code/?data=' . urlencode($linkQR) . '&size=100x100';
+
+            $html .= '
         <div class="qr-box"><img src="' . $qrImage . '" alt="QR Code" /></div>
         <div class="qr-text">Quý khách vui lòng quét mã QR để kích hoạt bảo hành điện tử</div>';
-}
+        }
 
-$html .= '<div style="page-break-after: always;"></div>';
-
+        $html .= '<div style="page-break-after: always;"></div>';
     }
 }
 
@@ -189,4 +192,3 @@ $dompdf->render();
 
 // Tải xuống file PDF
 $dompdf->stream("file_mau.pdf", ["Attachment" => false]);
-?>
