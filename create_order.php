@@ -886,8 +886,13 @@ if ($res = $conn->query($sqlHist)) {
         computeProductRow(card);
         const $sel = $(`#product_name_${orderNumber}_${nextIndex}`);
         setTimeout(() => {
-          $sel.select2('open');
-        }, 200);
+          if ($sel.data('select2')) {
+            $sel.select2('open');
+            const searchField = document.querySelector('.select2-container--open .select2-search__field');
+            if (searchField) searchField.focus();
+          }
+        }, 150);
+
       }
       renderPerRowAddButtons(orderNumber);
     }
