@@ -71,7 +71,90 @@ try {
     if (!$stmtInsertProduct->execute()) {
         throw new Exception('Lỗi thêm sản phẩm mới: ' . $stmtInsertProduct->error);
     }
+    /* =====================================================
+   BỔ SUNG: COPY DÒNG donhang_shopee + GÁN MAVT MỚI
+===================================================== */
 
+    // 1. Lấy order_code2 từ orders
+    $stmtGetOrderCode = $conn->prepare(
+        "SELECT order_code2 FROM orders WHERE id = ? LIMIT 1"
+    );
+    $stmtGetOrderCode->bind_param("i", $order_id);
+    $stmtGetOrderCode->execute();
+    $resOrderCode = $stmtGetOrderCode->get_result();
+
+    $orderCode2 = null;
+    if ($row = $resOrderCode->fetch_assoc()) {
+        $orderCode2 = $row['order_code2'];
+    }
+    $stmtGetOrderCode->close();
+
+    // Nếu có order_code2 → tiếp tục xử lý Shopee
+    if (!empty($orderCode2)) {
+
+        // 2. Lấy Maketoantmdt từ products theo product_id
+        $stmtGetMAVT = $conn->prepare(
+            "SELECT Maketoantmdt FROM products WHERE id = ? LIMIT 1"
+        );
+        $stmtGetMAVT->bind_param("i", $productMasterId);
+        $stmtGetMAVT->execute();
+        $resMAVT = $stmtGetMAVT->get_result();
+
+        $newMAVT = null;
+        if ($row = $resMAVT->fetch_assoc()) {
+            $newMAVT = $row['Maketoantmdt'];
+        }
+        $stmtGetMAVT->close();
+
+        // Chỉ tiếp tục nếu có MAVT
+        if (!empty($newMAVT)) {
+
+            // 3. Lấy 1 dòng mẫu của MaDonHang trong donhang_shopee
+            $stmtGetTemplate = $conn->prepare(
+                "SELECT * FROM donhang_shopee WHERE MaDonHang = ? LIMIT 1"
+            );
+            $stmtGetTemplate->bind_param("s", $orderCode2);
+            $stmtGetTemplate->execute();
+            $resTemplate = $stmtGetTemplate->get_result();
+
+            if ($tpl = $resTemplate->fetch_assoc()) {
+
+                // 4. INSERT dòng mới (COPY + GHI MAVT MỚI)
+                $stmtInsertShopee = $conn->prepare(
+                    "INSERT INTO donhang_shopee
+    (TrangThaiDonHang, MaDonHang, Ngaytaodon, NgayCapNhat,
+     MaKhoXuat, DVXuat, NguoiMuaHang,
+     MAVT, SoLuong, DonGia, ThanhTien, updated_at, MaGiaoDich)
+     VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?, 0, 0, NOW(), ?)"
+                );
+
+                $stmtInsertShopee->bind_param(
+                    "sssssssis",
+                    $tpl['TrangThaiDonHang'], // s
+                    $tpl['MaDonHang'],        // s
+                    $tpl['Ngaytaodon'],       // s (date string)
+                    $tpl['MaKhoXuat'],        // s
+                    $tpl['DVXuat'],           // s
+                    $tpl['NguoiMuaHang'],     // s
+                    $newMAVT,                 // s
+                    $quantity,                // i
+                    $tpl['MaGiaoDich']        // s
+                );
+
+
+
+                if (!$stmtInsertShopee->execute()) {
+                    throw new Exception(
+                        'Lỗi thêm dòng donhang_shopee: ' . $stmtInsertShopee->error
+                    );
+                }
+
+                $stmtInsertShopee->close();
+            }
+
+            $stmtGetTemplate->close();
+        }
+    }
     // ID của dòng order_products vừa thêm
     $orderProductId = $stmtInsertProduct->insert_id;
 
@@ -123,4 +206,3 @@ try {
     if (isset($stmtUpdateOrderStatus)) $stmtUpdateOrderStatus->close();
     $conn->close();
 }
-?>
