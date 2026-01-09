@@ -611,7 +611,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['order_code'])) {
           busy = false;
           return;
         }
-
+        // 🔥 SN dùng cho MODE 0 (đã bỏ C1 nếu có)
+        const mode0Sn = normalizeMode0Sn(rawSer);
         let fullSn = null;
         let productId = null;
         let productName = null;
@@ -677,9 +678,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['order_code'])) {
         /* =====================================================
            BƯỚC 3 – KHÔNG HARD PREFIX → MODE 0 BÌNH THƯỜNG
         ===================================================== */
-        if (!fullSn && !isHardPrefix && hasMode0) {
-          const sn0 = normalizeMode0Sn(rawSer);
-          const res0 = await lookupSerial(sn0);
+        if (!fullSn && hasMode0) {
+          const res0 = await lookupSerial(mode0Sn);
 
           if (res0 && res0.product_id) {
             const items0 = document.querySelectorAll('.product-item[data-nhap-tay="0"]');
@@ -688,7 +688,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['order_code'])) {
                 String(card.dataset.productId) === String(res0.product_id) &&
                 findNextEmptyInput(card)
               ) {
-                fullSn = sn0;
+                fullSn = mode0Sn; // ✅ KHÔNG C1
                 productId = card.dataset.productId;
                 productName = res0.product_name || card.dataset.productName;
                 matchedMode = 0;
@@ -712,7 +712,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['order_code'])) {
            BƯỚC 5 – KHÔNG MATCH
         ===================================================== */
         if (!fullSn) {
-          showMessage(`❌ Không tìm thấy SN phù hợp: ${rawSer}`, 'error');
+          showMessage(`❌ Không tìm thấy SN phù hợp: ${mode0Sn}`, 'error');
           scanSoundError.play();
           busy = false;
           return;
