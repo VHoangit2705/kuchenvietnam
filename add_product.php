@@ -3,55 +3,59 @@ session_start();
 header('Content-Type: application/json');
 include 'config.php';
 
+/* ================== CHECK ================== */
 if ($conn->connect_error) {
     die(json_encode(['success' => false, 'message' => 'Kết nối thất bại: ' . $conn->connect_error]));
 }
+
 if (!isset($_SESSION['full_name'])) {
     echo json_encode(['success' => false, 'message' => 'Người dùng chưa đăng nhập.']);
     exit();
 }
 $editedBy = $_SESSION['full_name'];
 
-/* ===== Nhận input ===== */
+/* ================== INPUT ================== */
 $order_id        = intval($_POST['orderId']);
-$productName     = $_POST['newProductName'];
+$productName     = trim($_POST['newProductName']);
 $quantity        = intval($_POST['newQuantity']);
-$unitPrice       = intval($_POST['newPrice']);            // đơn giá từ form
+$unitPrice       = intval($_POST['newPrice']);
 $priceDifference = intval($_POST['newPriceDifference']);
-$isPromotion     = isset($_POST['newIsPromotion'])   ? 1 : 0;
+$isPromotion     = isset($_POST['newIsPromotion']) ? 1 : 0;
 $warrantyScan    = isset($_POST['newwarranty_scan']) ? 0 : 1;
 
-/* ===== Tính toán giữ nguyên ===== */
+/* ================== CALC ================== */
 $totalPrice   = ($quantity * $unitPrice) + $priceDifference;
 $excludingVAT = 0;
 $VAT          = "10%";
 $VATPrice     = intval($totalPrice * 0.1);
 $subAddress   = "Default Address";
 
-/* ===== Lấy product_id theo product_name (match chính xác) ===== */
-$productMasterId = null;
-$stmtFind = $conn->prepare("SELECT id FROM products WHERE product_name = ? LIMIT 1");
-$stmtFind->bind_param("s", $productName);
-$stmtFind->execute();
-$resFind = $stmtFind->get_result();
-if ($row = $resFind->fetch_assoc()) {
-    $productMasterId = (int)$row['id'];
-}
-$stmtFind->close();
-/* Nếu không tìm thấy product_id, vẫn cho phép null/0 để không chặn thao tác */
-if ($productMasterId === null) $productMasterId = 0;
+/* ================== MAP PRODUCT ================== */
+$productMasterId = 0;
+$stmt = $conn->prepare("SELECT id, Maketoantmdt FROM products WHERE product_name = ? LIMIT 1");
+$stmt->bind_param("s", $productName);
+$stmt->execute();
+$res = $stmt->get_result();
 
-/* ===== Giao dịch ===== */
+$newMAVT = null;
+if ($row = $res->fetch_assoc()) {
+    $productMasterId = (int)$row['id'];
+    $newMAVT         = $row['Maketoantmdt'];
+}
+$stmt->close();
+
+/* ================== TRANSACTION ================== */
 $conn->begin_transaction();
 
 try {
-    // INSERT vào order_products: thêm cột product_id ngay trước product_name
-    $sqlInsertProduct = "
-        INSERT INTO order_products 
-            (order_id, product_id, product_name, quantity, excluding_VAT, VAT, VAT_price, price, price_difference, sub_address, is_promotion, warranty_scan) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    $stmtInsertProduct = $conn->prepare($sqlInsertProduct);
-    // Kiểu dữ liệu: i i s i i s i i i s i i  -> "iisiisiiisii"
+    /* ===== 1. INSERT order_products ===== */
+    $stmtInsertProduct = $conn->prepare(
+        "INSERT INTO order_products
+        (order_id, product_id, product_name, quantity, excluding_VAT, VAT, VAT_price,
+         price, price_difference, sub_address, is_promotion, warranty_scan)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    );
+
     $stmtInsertProduct->bind_param(
         "iisiisiiisii",
         $order_id,
@@ -61,7 +65,7 @@ try {
         $excludingVAT,
         $VAT,
         $VATPrice,
-        $totalPrice,        // vẫn lưu tổng giá như logic cũ
+        $totalPrice,
         $priceDifference,
         $subAddress,
         $isPromotion,
@@ -69,140 +73,122 @@ try {
     );
 
     if (!$stmtInsertProduct->execute()) {
-        throw new Exception('Lỗi thêm sản phẩm mới: ' . $stmtInsertProduct->error);
+        throw new Exception('Lỗi thêm sản phẩm: ' . $stmtInsertProduct->error);
     }
-    /* =====================================================
-   BỔ SUNG: COPY DÒNG donhang_shopee + GÁN MAVT MỚI
-===================================================== */
 
-    // 1. Lấy order_code2 từ orders
-    $stmtGetOrderCode = $conn->prepare(
-        "SELECT order_code2 FROM orders WHERE id = ? LIMIT 1"
-    );
-    $stmtGetOrderCode->bind_param("i", $order_id);
-    $stmtGetOrderCode->execute();
-    $resOrderCode = $stmtGetOrderCode->get_result();
+    $orderProductId = $stmtInsertProduct->insert_id;
+    $stmtInsertProduct->close();
+
+    /* ===== 2. LẤY order_code2 ===== */
+    $stmt = $conn->prepare("SELECT order_code2 FROM orders WHERE id = ? LIMIT 1");
+    $stmt->bind_param("i", $order_id);
+    $stmt->execute();
+    $res = $stmt->get_result();
 
     $orderCode2 = null;
-    if ($row = $resOrderCode->fetch_assoc()) {
+    if ($row = $res->fetch_assoc()) {
         $orderCode2 = $row['order_code2'];
     }
-    $stmtGetOrderCode->close();
+    $stmt->close();
 
-    // Nếu có order_code2 → tiếp tục xử lý Shopee
-    if (!empty($orderCode2)) {
+    /* ===== 3. SHOPEE LOGIC (NÂNG CẤP) ===== */
+    if (!empty($orderCode2) && !empty($newMAVT)) {
 
-        // 2. Lấy Maketoantmdt từ products theo product_id
-        $stmtGetMAVT = $conn->prepare(
-            "SELECT Maketoantmdt FROM products WHERE id = ? LIMIT 1"
+        // 3.1 Check đã tồn tại MAVT trong MaDonHang chưa
+        $stmtCheck = $conn->prepare(
+            "SELECT id FROM donhang_shopee
+             WHERE MaDonHang = ? AND MAVT = ? LIMIT 1"
         );
-        $stmtGetMAVT->bind_param("i", $productMasterId);
-        $stmtGetMAVT->execute();
-        $resMAVT = $stmtGetMAVT->get_result();
+        $stmtCheck->bind_param("ss", $orderCode2, $newMAVT);
+        $stmtCheck->execute();
+        $exists = $stmtCheck->get_result()->fetch_assoc();
+        $stmtCheck->close();
 
-        $newMAVT = null;
-        if ($row = $resMAVT->fetch_assoc()) {
-            $newMAVT = $row['Maketoantmdt'];
-        }
-        $stmtGetMAVT->close();
+        // 3.2 Nếu CHƯA tồn tại → COPY & INSERT
+        if (!$exists) {
 
-        // Chỉ tiếp tục nếu có MAVT
-        if (!empty($newMAVT)) {
-
-            // 3. Lấy 1 dòng mẫu của MaDonHang trong donhang_shopee
-            $stmtGetTemplate = $conn->prepare(
+            // Lấy dòng mẫu
+            $stmtTpl = $conn->prepare(
                 "SELECT * FROM donhang_shopee WHERE MaDonHang = ? LIMIT 1"
             );
-            $stmtGetTemplate->bind_param("s", $orderCode2);
-            $stmtGetTemplate->execute();
-            $resTemplate = $stmtGetTemplate->get_result();
+            $stmtTpl->bind_param("s", $orderCode2);
+            $stmtTpl->execute();
+            $tpl = $stmtTpl->get_result()->fetch_assoc();
+            $stmtTpl->close();
 
-            if ($tpl = $resTemplate->fetch_assoc()) {
-
-                // 4. INSERT dòng mới (COPY + GHI MAVT MỚI)
+            if ($tpl) {
                 $stmtInsertShopee = $conn->prepare(
                     "INSERT INTO donhang_shopee
-    (TrangThaiDonHang, MaDonHang, Ngaytaodon, NgayCapNhat,
-     MaKhoXuat, DVXuat, NguoiMuaHang,
-     MAVT, SoLuong, DonGia, ThanhTien, updated_at, MaGiaoDich)
-     VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?, 0, 0, NOW(), ?)"
+                    (TrangThaiDonHang, MaDonHang, Ngaytaodon, NgayCapNhat,
+                     MaKhoXuat, DVXuat, NguoiMuaHang,
+                     MAVT, SoLuong, DonGia, ThanhTien, updated_at, MaGiaoDich)
+                     VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?, 0, 0, NOW(), ?)"
                 );
 
                 $stmtInsertShopee->bind_param(
                     "sssssssis",
-                    $tpl['TrangThaiDonHang'], // s
-                    $tpl['MaDonHang'],        // s
-                    $tpl['Ngaytaodon'],       // s (date string)
-                    $tpl['MaKhoXuat'],        // s
-                    $tpl['DVXuat'],           // s
-                    $tpl['NguoiMuaHang'],     // s
-                    $newMAVT,                 // s
-                    $quantity,                // i
-                    $tpl['MaGiaoDich']        // s
+                    $tpl['TrangThaiDonHang'],
+                    $tpl['MaDonHang'],
+                    $tpl['Ngaytaodon'],
+                    $tpl['MaKhoXuat'],
+                    $tpl['DVXuat'],
+                    $tpl['NguoiMuaHang'],
+                    $newMAVT,
+                    $quantity,
+                    $tpl['MaGiaoDich']
                 );
 
-
-
                 if (!$stmtInsertShopee->execute()) {
-                    throw new Exception(
-                        'Lỗi thêm dòng donhang_shopee: ' . $stmtInsertShopee->error
-                    );
+                    throw new Exception('Lỗi thêm Shopee: ' . $stmtInsertShopee->error);
                 }
 
                 $stmtInsertShopee->close();
             }
-
-            $stmtGetTemplate->close();
         }
     }
-    // ID của dòng order_products vừa thêm
-    $orderProductId = $stmtInsertProduct->insert_id;
 
-    // Ghi lịch sử (giữ nguyên cấu trúc bảng hiện tại)
-    $actionType = 'add';
-    $comments   = 'Thêm sản phẩm mới vào đơn hàng';
-    $sqlInsertHistory = "
-        INSERT INTO order_edit_history 
-            (order_id, action_type, product_id, product_name, quantity, price, edited_by, comments) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-    $stmtInsertHistory = $conn->prepare($sqlInsertHistory);
-    // Lưu product_id ở đây CHÍNH LÀ id của order_products (giữ nguyên logic cũ)
-    $stmtInsertHistory->bind_param(
-        "isisiiss",
+    /* ===== 4. HISTORY ===== */
+    $stmtHistory = $conn->prepare(
+        "INSERT INTO order_edit_history
+        (order_id, action_type, product_id, product_name, quantity, price, edited_by, comments)
+        VALUES (?, 'add', ?, ?, ?, ?, ?, ?)"
+    );
+
+    $comment = 'Thêm sản phẩm mới vào đơn hàng';
+    $stmtHistory->bind_param(
+        "iisisss",
         $order_id,
-        $actionType,
         $orderProductId,
         $productName,
         $quantity,
         $totalPrice,
         $editedBy,
-        $comments
+        $comment
     );
-    if (!$stmtInsertHistory->execute()) {
-        throw new Exception('Lỗi ghi lịch sử chỉnh sửa: ' . $stmtInsertHistory->error);
-    }
 
-    // Update trạng thái đơn hàng (giữ nguyên)
+    if (!$stmtHistory->execute()) {
+        throw new Exception('Lỗi ghi lịch sử');
+    }
+    $stmtHistory->close();
+
+    /* ===== 5. UPDATE ORDER ===== */
     $status = "Đang chờ quét QR";
-    $sqlUpdateOrderStatus = "UPDATE orders SET status = ? WHERE id = ?";
-    $stmtUpdateOrderStatus = $conn->prepare($sqlUpdateOrderStatus);
-    $stmtUpdateOrderStatus->bind_param("si", $status, $order_id);
-    $stmtUpdateOrderStatus->execute();
+    $stmt = $conn->prepare("UPDATE orders SET status = ? WHERE id = ?");
+    $stmt->bind_param("si", $status, $order_id);
+    $stmt->execute();
+    $stmt->close();
 
     $conn->commit();
 
     echo json_encode([
-        'success'      => true,
-        'message'      => 'Sản phẩm mới đã được thêm, lịch sử chỉnh sửa đã được lưu và trạng thái đơn hàng đã được cập nhật.',
-        'productId'    => $orderProductId,  // id dòng order_products
-        'product_fk'   => $productMasterId  // id sản phẩm (products.id) đã map
+        'success'    => true,
+        'message'    => 'Thêm sản phẩm thành công (Shopee được xử lý thông minh)',
+        'productId'  => $orderProductId,
+        'product_fk' => $productMasterId
     ]);
 } catch (Exception $e) {
     $conn->rollback();
     echo json_encode(['success' => false, 'message' => $e->getMessage()]);
 } finally {
-    if (isset($stmtInsertProduct))   $stmtInsertProduct->close();
-    if (isset($stmtInsertHistory))   $stmtInsertHistory->close();
-    if (isset($stmtUpdateOrderStatus)) $stmtUpdateOrderStatus->close();
     $conn->close();
 }
